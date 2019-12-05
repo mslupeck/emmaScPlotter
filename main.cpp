@@ -10,9 +10,6 @@
 
 #include <TSystem.h>
 #include <TApplication.h>
-//#include <TSystemDirectory.h>
-//#include <TLegend.h>
-//#include <TAxis.h>
 
 #include "common.h"
 #include "cliParser.h"
@@ -42,11 +39,13 @@ int main(int argc, char* argv[]){
 			if(eetr.ReadTree(treeName) < 0) return -2;
 			string objectName = "event";
 			if(eetr.ReadFileStorage(objectName) < 0) return -3;
-//			for(int i=0; i<5; i++){
+//			for(int i=0; i<1e5; i++){
 //				eetr.PrintStorageContents(cout, i);
 //			}
 //			eetr.AnalysePatternTimingCorrelation();
-			eetr.AnalyseMultiplicityPerLevel();
+//			eetr.AnalyseEventTimeSpectrum();
+			eetr.AnalyseRawScTimeSpectrum();
+//			eetr.AnalyseMultiplicityPerLevel();
 
 		}
 		theApp.SetIdleTimer(100000,"exit()");

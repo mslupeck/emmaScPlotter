@@ -82,7 +82,7 @@ CFLAGS	= -Wall -ggdb $(CXXFLAGS) $(LDFLAGS) $(ROOTCFLAGS) $(ROOTLDFLAGS) $(ROOTL
 #---------------=============== MAIN MAKEFILE ===============---------------
 CC			= g++
 TARGET		= emmaScPlotter
-SOURCE		= main.cpp EmmaEventTreeReader.cpp common.cpp cliParams.cpp cliParser.cpp
+SOURCE		= main.cpp EmmaEventTreeReader.cpp TEventAnalysis.cpp common.cpp cliParams.cpp cliParser.cpp
 
 
 # Unused source files:
