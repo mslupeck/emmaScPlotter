@@ -34,18 +34,22 @@ int main(int argc, char* argv[]){
 		TApplication theApp("App", &argc, argv);{
 
 			EmmaEventTreeReader eetr;
-			if(eetr.OpenRootFile(inputPath) < 0) return -1;
-			string treeName = "tr";
-			if(eetr.ReadTree(treeName) < 0) return -2;
-			string objectName = "event";
-			if(eetr.ReadFileStorage(objectName) < 0) return -3;
-//			for(int i=0; i<1e5; i++){
+			string treeName = "tr", objectName = "event";
+			if(eetr.ReadTreeFromRootFile(inputPath, treeName, objectName) < 0) return -1;
+
+			vector<int> viFileBad;
+			viFileBad.push_back(64); // TODO: Adjust accordingly for each run - this is OK for non-full R311
+			eetr.FilterOutBadFiles(viFileBad);
+			eetr.setIgnoreHitsWithoutTiming(true);
+			eetr.setIgnoreHitsWithoutPattern(true);
+			eetr.setAcceptHitsFromPromptPeakOnly(true, 507200, 508400);
+//			for(int i=0; i<1e4; i++){
 //				eetr.PrintStorageContents(cout, i);
 //			}
 //			eetr.AnalysePatternTimingCorrelation();
 //			eetr.AnalyseEventTimeSpectrum();
-			eetr.AnalyseRawScTimeSpectrum();
-//			eetr.AnalyseMultiplicityPerLevel();
+//			eetr.AnalyseRawScTimeSpectrum();
+			eetr.AnalyseMultiplicityPerLevel();
 
 		}
 		theApp.SetIdleTimer(100000,"exit()");

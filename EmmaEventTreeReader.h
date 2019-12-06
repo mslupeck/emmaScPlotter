@@ -13,7 +13,6 @@
 #include <string>
 #include <time.h>
 
-
 #include <TDirectory.h>
 #include <TFile.h>
 #include <TTree.h>
@@ -26,6 +25,7 @@
 
 #include "TFileStorage.h"
 #include "TEventAnalysis.h"
+#include "TCuts.h"
 #include "common.h"
 
 namespace std {
@@ -34,22 +34,17 @@ class EmmaEventTreeReader {
 private:
 	string filePath;
 	string fileBaseName;
-	TFile *f;
-	TTree *t;                     // pointer to currently used tree (one of the above)
-	TFileStorage *fs;			  // currently used fs, pointing to either of the tree entries
+	vector<TFileStorage*> vfs;     // copy of the file contents from the tree to memory
+	TCuts cuts;
 
 	vector<int16_t> vZcoord;
 	void ListPlaneCoords(vector<int16_t>& vout, Int_t evnLimit=100);
-	void SetupPad(TH1* h, float fontSize, float lmargin, float rmargin, float tmargin, float bmargin, float xoffset=1, float yoffset=1, float zoffset=1);
-	void DrawTextNdc(std::string s, double x, double y, double size, Color_t col=kBlack, Float_t tangle=0);
 
 public:
 	EmmaEventTreeReader();
 	virtual ~EmmaEventTreeReader();
 
-	int OpenRootFile(const string &filePath);
-	int ReadTree(const string &treeName);
-	int ReadFileStorage(const string &objectName);
+	int ReadTreeFromRootFile(const string &filePath, const string &treeName, const string &objectName);
 
 	void PrintStorageContents(ostream &out, int64_t evn);
 
@@ -57,6 +52,14 @@ public:
 	void AnalyseEventTimeSpectrum();
 	void AnalyseRawScTimeSpectrum();
 	void AnalyseMultiplicityPerLevel();
+
+	// Cuts
+	void FilterOutBadFiles(vector<int> &viFile);
+
+	// Getter / setter
+	void setIgnoreHitsWithoutPattern(bool ignoreHitsWithoutPattern);
+	void setIgnoreHitsWithoutTiming(bool ignoreHitsWithoutTiming);
+	void setAcceptHitsFromPromptPeakOnly(bool acceptHitsFromPromptPeakOnly, int t0, int t1);
 };
 } /* namespace std */
 

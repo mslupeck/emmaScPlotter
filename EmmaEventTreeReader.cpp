@@ -10,53 +10,51 @@
 namespace std {
 
 EmmaEventTreeReader::EmmaEventTreeReader() {
-	f = nullptr;
-	t = nullptr;
-	fs = nullptr;
 }
 
 EmmaEventTreeReader::~EmmaEventTreeReader(){
-	if(f != nullptr){
-		f->Close();
-	}
 }
 
-int EmmaEventTreeReader::OpenRootFile(const string &filePath){
+int EmmaEventTreeReader::ReadTreeFromRootFile(const string &filePath, const string &treeName, const string &objectName){
 	this->filePath = filePath;
 	fileBaseName = filePath.substr(filePath.find_last_of('/')+1);
 	fileBaseName = fileBaseName.substr(0, fileBaseName.find_last_of('.'));
 
 	cout << "  <I> Opening file: " << filePath << endl;
-	f = new TFile(filePath.c_str(), "READ"); // try opening the root file
-	if(f==NULL){
+	TFile *f = new TFile(filePath.c_str(), "READ"); // try opening the root file
+	if(f == nullptr){
 		cout << "<E> Problems opening file: " << filePath << endl;
 		return -1; // exit program
 	}
-	return 0;
-}
 
-int EmmaEventTreeReader::ReadTree(const string &treeName){
-	t = (TTree*)(f->Get(treeName.c_str())); // get the tree from file
-	if(t==NULL){
+	TTree *t = (TTree*)(f->Get(treeName.c_str())); // get the tree from file
+	if(t == nullptr){
 		cout << "<E> Problems opening tree: " << treeName << endl;
 		return -1; // exit program
 	}
-	return 0;
-}
 
-int EmmaEventTreeReader::ReadFileStorage(const string &objectName){
+	TFileStorage *fs = nullptr;
 	t->SetBranchAddress(objectName.c_str(), &fs);
-	if(fs==NULL){
+	if(fs == nullptr){
 		cout << "<E> Problems opening event object: " << objectName << endl;
 		return -1; // exit program
 	}
+
+	// Copy tree to vector in memory
+	int nEntries = t->GetEntries();
+	for(int evn=0; evn<nEntries; evn++){
+		t->GetEntry(evn);
+		vfs.push_back(new TFileStorage(*fs));
+	}
+
+	f->Close();
 	return 0;
 }
 
 void EmmaEventTreeReader::PrintStorageContents(ostream &out, int64_t evn){
-	int nEntries = t->GetEntries();
+	int nEntries = vfs.size();
 	if(evn<nEntries){
-		t->GetEntry(evn);
+		TFileStorage *fs = vfs.at(evn);
 		out << left;
 		out << "R" << fs->iRunNumber << "-F" << setw(3) << fs->iFileNumber+100 << ":" << evn << endl;
 		out << "  StartTime:      " << right << setw(12) << fs->lFileStartTimeS << "." << left << setw(10) << fs->lFileStartTimeNs << "s  /  ";
@@ -102,12 +100,9 @@ void EmmaEventTreeReader::AnalysePatternTimingCorrelation(){
 	}
 
 	// Main event loop
-	int nEntries = t->GetEntries();
+	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
-		t->GetEntry(evn);
-		// TODO: only for R311
-		if(fs->iFileNumber >=64 && fs->iFileNumber <=64) continue;
-		TEventAnalysis ea(&fs->vHitPoint);
+		TEventAnalysis ea(&(vfs.at(evn)->vHitPoint), &cuts);
 		ea.FillHbTbHistos(vTimeCnt, vHbCnt, vTimeAndHbCnt, vTimeOrHbCnt);
 	}
 
@@ -194,15 +189,11 @@ void EmmaEventTreeReader::AnalyseEventTimeSpectrum(){
 	hEventTime->SetDirectory(0);
 
 	// Main event loop
-	int nEntries = t->GetEntries();
+	int nEntries = vfs.size();
 	Double_t prevEventTime = 0;
 	for(int evn=0; evn<nEntries; evn++){
-		t->GetEntry(evn);
-
-		// TODO: only for R311
-		//if(fs->iFileNumber >=64 && fs->iFileNumber <=64) continue;
-
-		TEventAnalysis ea(&(fs->vHitPoint));
+		TFileStorage *fs = vfs.at(evn);
+		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
 		if(evn>0){
 			hEventTime->Fill((fs->fEventTimeS-prevEventTime)*1e3);
 		}
@@ -224,7 +215,7 @@ void EmmaEventTreeReader::AnalyseEventTimeSpectrum(){
 	float ymax = hEventTime->GetMaximum();
 	float nTotal = hEventTime->Integral();
 	c->cd(2);
-		SetupPad(hEventTime, fontsize, lmargin, rmargin, tmargin, bmargin, xoffset, yoffset);
+		common::SetupPad(hEventTime, fontsize, lmargin, rmargin, tmargin, bmargin, xoffset, yoffset);
 		gPad->SetLogy();
 		hEventTime->GetXaxis()->SetRangeUser(0, 2);
 		hEventTime->GetYaxis()->SetRangeUser(1e-2, ymax*2);
@@ -236,11 +227,11 @@ void EmmaEventTreeReader::AnalyseEventTimeSpectrum(){
 		float nPeak2 = hEventTime->Integral(hEventTime->GetXaxis()->FindBin(int2), hEventTime->GetXaxis()->FindBin(int3));
 		ss1 << "#frac{N_{peak1}(" << int0 << ".." << int1 << ")}{N_{total}} = " << round(nPeak1/nTotal*1000)/10 << "%";
 		ss2 << "#frac{N_{peak2}(" << int2 << ".." << int3 << ")}{N_{total}} = " << round(nPeak2/nTotal*1000)/10 << "%";
-		DrawTextNdc(ss1.str().c_str(), 0.24, 0.8, fontsize);
-		DrawTextNdc(ss2.str().c_str(), 0.6, 0.35, fontsize);
+		common::DrawTextNdc(ss1.str().c_str(), 0.24, 0.8, fontsize);
+		common::DrawTextNdc(ss2.str().c_str(), 0.6, 0.35, fontsize);
 
 	c->cd(1);
-		SetupPad(hEventTime, fontsize, lmargin, rmargin, tmargin, bmargin, xoffset, yoffset);
+		common::SetupPad(hEventTime, fontsize, lmargin, rmargin, tmargin, bmargin, xoffset, yoffset);
 		gPad->SetLogy();
 		float scale = 100;
 		hEventTime->Rebin(scale);
@@ -250,7 +241,7 @@ void EmmaEventTreeReader::AnalyseEventTimeSpectrum(){
 		hEventTime->DrawCopy();
 		stringstream ss3;
 		ss3 << "nTotal = " << nTotal;
-		DrawTextNdc(ss3.str().c_str(), 0.5, 0.92, fontsize);
+		common::DrawTextNdc(ss3.str().c_str(), 0.5, 0.92, fontsize);
 }
 
 void EmmaEventTreeReader::AnalyseRawScTimeSpectrum(){
@@ -265,12 +256,10 @@ void EmmaEventTreeReader::AnalyseRawScTimeSpectrum(){
 
 	// Main event loop
 	ListPlaneCoords(vZcoord);
-	int nEntries = t->GetEntries();
+	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
-		// TODO: only for R311
-		if(fs->iFileNumber >=64 && fs->iFileNumber <=64) continue;
-		t->GetEntry(evn);
-		TEventAnalysis ea(&(fs->vHitPoint));
+		TFileStorage *fs = vfs.at(evn);
+		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
 		ea.AnalyseLevelMultiplicity(&vZcoord);
 		ea.FillRawScTimeHistos(vhScTime);
 	}
@@ -296,7 +285,7 @@ void EmmaEventTreeReader::AnalyseRawScTimeSpectrum(){
 		}
 	}
 	TLegend *leg = new TLegend(0.75, bmargin+0.05, 0.95, 1.0-tmargin-0.05);
-	vector<TH1D*> vhAvg;
+	vector<TH1D*> vhAbs;
 	for(UInt_t ih=0; ih<vhScTime.size(); ih++){
 		c->cd(ih+1);
 		TH2D* h2 = vhScTime.at(ih);
@@ -305,20 +294,20 @@ void EmmaEventTreeReader::AnalyseRawScTimeSpectrum(){
 		for(Int_t iy=1; iy<=h2->GetNbinsY(); iy++){
 			stringstream ssname;
 			ssname << h2->GetName() << "_nLevelsPresent=" << iy;
-			TH1D* h1 = h2->ProjectionX(ssname.str().c_str(), iy, iy+1);
+			TH1D* h1 = h2->ProjectionX(ssname.str().c_str(), iy, iy);
 			h1->SetDirectory(0);
 			h1->SetLineWidth(2);
 			h1->SetLineColor(vCol.at(iy-1));
 			if(first){
-				SetupPad(h1, fontsize, lmargin, rmargin, tmargin, bmargin, xoffset, yoffset);
+				common::SetupPad(h1, fontsize, lmargin, rmargin, tmargin, bmargin, xoffset, yoffset);
 				h1->SetTitle("");
 				h1->DrawCopy();
 				h1->GetXaxis()->SetTitle("Time [100 ps]");
-				h1->GetYaxis()->SetTitle("Counts");
+				h1->GetYaxis()->SetTitle("Number of hits");
 				h1->GetYaxis()->SetRangeUser(0.8, ymax*5);
 				string padName = h1->GetName();
 				padName = padName.substr(0, padName.find_first_of('_'));
-				DrawTextNdc(padName.c_str(), 0.08, 0.85, fontsize);
+				common::DrawTextNdc(padName.c_str(), 0.08, 0.85, fontsize);
 				first = false;
 			}
 			else{
@@ -332,26 +321,42 @@ void EmmaEventTreeReader::AnalyseRawScTimeSpectrum(){
 			}
 
 			if(ih==0){
-				vhAvg.push_back(h1);
+				vhAbs.push_back(h1);
 			}
 		}
 	}
 
-	TCanvas *cAvg = new TCanvas((cvsName+"_"+fileBaseName+"_avgOnly").c_str(), (cvsName+"_"+fileBaseName+"_avgOnly").c_str(), 1600,800);
+	TCanvas *cAvg = new TCanvas((cvsName+"_"+fileBaseName+"_absOnly").c_str(), (cvsName+"_"+fileBaseName+"_avgOnly").c_str(), 1600,800);
 	cAvg->cd();
 	gPad->SetLogy();
-	TH1D* h = vhAvg.at(0);
-	SetupPad(h, 0.045, 0.07, 0.05, 0.01, 0.1, 0.9, 0.65);
+	TH1D* h = vhAbs.at(0);
+	common::SetupPad(h, 0.045, 0.07, 0.05, 0.01, 0.1, 1.0, 0.7);
 	h->Draw();
-	h->GetXaxis()->SetRangeUser(505000,515000);
-	for(UInt_t ih=1; ih<vhAvg.size(); ih++){
-		vhAvg.at(ih)->Draw("same");
+	h->GetXaxis()->SetRangeUser(cuts.promptT0 - 4*(cuts.promptT1-cuts.promptT0), cuts.promptT1 + 12*(cuts.promptT1-cuts.promptT0));
+	for(UInt_t ih=1; ih<vhAbs.size(); ih++){
+		vhAbs.at(ih)->Draw("same");
 	}
-	TLegend* leg2 = (TLegend*)leg->Clone("legend");
-	leg2->SetX1(0.6);
-	leg2->SetX2(0.93);
-	leg2->SetY1(0.6);
-	leg2->SetY2(0.94);
+
+	// Find total number of hits irrespective of any cuts
+	Int_t nTotalHits = 0;
+	for(int evn=0; evn<nEntries; evn++){
+		TFileStorage *fs = vfs.at(evn);
+		nTotalHits += fs->vHitPoint.size();
+	}
+
+	TLegend *leg2 = new TLegend(0.4, 0.6, 0.93, 0.94);
+	for(UInt_t ih=0; ih<vhAbs.size(); ih++){
+		TH1D* h = vhAbs.at(ih);
+		string histoName = h->GetName();
+		stringstream ssEntryName;
+		ssEntryName << histoName.substr(histoName.find_first_of('_')+1);
+		double nPeak = h->Integral(h->FindBin(cuts.promptT0), h->FindBin(cuts.promptT1));
+		ssEntryName.setf(ios::fixed);
+		ssEntryName << " (" << setprecision(0) << setw(9) << right << nPeak << ", ";
+		ssEntryName << setprecision(1) << 100.0*nPeak/h->Integral(0, h->GetNbinsX()+1) << "%, ";
+		ssEntryName << setprecision(1) << 100.0*nPeak/nTotalHits << "%)";
+		leg2->AddEntry(h, ssEntryName.str().c_str(), "l");
+	}
 	leg2->Draw();
 }
 
@@ -360,8 +365,8 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 	vector< vector<TH2D*> > vvh2;
 	vector<string> sType;
 	sType.push_back("nLayers>=3");
-	sType.push_back("nLayers<3");
-	sType.push_back("noCuts");
+	sType.push_back("nLayers<=2");
+	ListPlaneCoords(vZcoord);
 	for(UInt_t itype=0; itype<sType.size(); itype++){
 		vector<TH2D*> vh2;
 		for(UInt_t iz=0; iz<vZcoord.size(); iz++){
@@ -374,11 +379,10 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 	}
 
 	// Main event loop
-	ListPlaneCoords(vZcoord);
-	int nEntries = t->GetEntries();
+	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
-		t->GetEntry(evn);
-		TEventAnalysis ea(&(fs->vHitPoint));
+		TFileStorage *fs = vfs.at(evn);
+		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
 		ea.AnalyseLevelMultiplicity(&vZcoord);
 		if(ea.getLevelsPresent() >= 3){
 			ea.FillLayerHistos(vvh2.at(0));
@@ -386,7 +390,6 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 		else{
 			ea.FillLayerHistos(vvh2.at(1));
 		}
-		ea.FillLayerHistos(vvh2.at(2));
 	}
 
 	// Drawing
@@ -395,6 +398,7 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 	for(UInt_t itype=0; itype<sType.size(); itype++){
 		for(UInt_t iz=0; iz<vZcoord.size(); iz++){
 			maxCnts = TMath::Max(maxCnts, vvh2.at(itype).at(iz)->GetMaximum());
+			cout << itype << " " << iz << " " << vvh2.at(itype).at(iz)->GetMaximum() << endl;
 		}
 	}
 
@@ -412,6 +416,52 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 	}
 }
 
+void EmmaEventTreeReader::setIgnoreHitsWithoutPattern(bool ignoreHitsWithoutPattern) {
+	cuts.ignoreHitsWithoutPattern = ignoreHitsWithoutPattern;
+}
+
+void EmmaEventTreeReader::setIgnoreHitsWithoutTiming(bool ignoreHitsWithoutTiming) {
+	cuts.ignoreHitsWithoutTiming = ignoreHitsWithoutTiming;
+}
+
+void EmmaEventTreeReader::setAcceptHitsFromPromptPeakOnly(bool acceptHitsFromPromptPeakOnly, int t0, int t1){
+	cuts.acceptHitsFromPromptPeakOnly = acceptHitsFromPromptPeakOnly;
+	cuts.promptT0 = t0;
+	cuts.promptT1 = t1;
+}
+
+void EmmaEventTreeReader::FilterOutBadFiles(vector<int> &viFile){
+	cout << "  <I> EmmaEventTreeReader::FilterOutBadFiles(): ";
+	for(UInt_t i=0; i<viFile.size(); i++){
+		cout << viFile.at(i) << " ";
+	}
+	cout << endl;
+
+	int nEntries = vfs.size();
+	for(UInt_t i=0; i<viFile.size(); i++){
+		int evn0 = 0, evn1 = 0;
+		float first = true;
+		for(int evn=0; evn<nEntries; evn++){
+			TFileStorage *fs = vfs.at(evn);
+			if(fs->iFileNumber == viFile.at(i)){
+				if(first){
+					evn0 = evn;
+					first = false;
+				}
+			}
+			else{
+				if(!first){
+					evn1 = evn;
+					break;
+				}
+			}
+		}
+		vfs.erase(vfs.begin() + evn0, vfs.begin() + evn1);
+	}
+}
+
+
+
 // ---------------------------
 // ----- Private methods -----
 // ---------------------------
@@ -419,13 +469,12 @@ void EmmaEventTreeReader::ListPlaneCoords(vector<int16_t>& vout, Int_t evnLimit)
 	vector<int16_t> v;
 	vout.clear();
 
-	int nEntries = t->GetEntries();
+	int nEntries = vfs.size();
 	if(nEntries > evnLimit){
 		nEntries = evnLimit;
 	}
 	for(int evn=0; evn<nEntries; evn++){
-		t->GetEntry(evn);
-		vector<THitStorage> *vHit = &(fs->vHitPoint);
+		vector<THitStorage> *vHit = &vfs.at(evn)->vHitPoint;
 		for(UInt_t ihit=0; ihit<vHit->size(); ihit++){
 			v.push_back(vHit->at(ihit).z);
 		}
@@ -442,36 +491,6 @@ void EmmaEventTreeReader::ListPlaneCoords(vector<int16_t>& vout, Int_t evnLimit)
 		}
 		prevv = v.at(i);
 	}
-}
-
-void EmmaEventTreeReader::SetupPad(TH1* h, float fontSize, float lmargin, float rmargin, float tmargin, float bmargin, float xoffset, float yoffset, float zoffset){
-	gPad->SetTopMargin(tmargin);
-	gPad->SetBottomMargin(bmargin);
-	gPad->SetLeftMargin(lmargin);
-	gPad->SetRightMargin(rmargin);
-	gPad->SetGridx();
-	gPad->SetGridy();
-	gPad->SetCrosshair();
-	h->GetXaxis()->SetLabelSize(fontSize);
-	h->GetXaxis()->SetTitleSize(fontSize*1.2);
-	h->GetYaxis()->SetLabelSize(fontSize);
-	h->GetYaxis()->SetTitleSize(fontSize*1.2);
-	h->GetZaxis()->SetLabelSize(fontSize);
-	h->GetZaxis()->SetTitleSize(fontSize*1.2);
-	h->GetXaxis()->SetTitleOffset(xoffset);
-	h->GetYaxis()->SetTitleOffset(yoffset);
-	h->GetZaxis()->SetTitleOffset(zoffset);
-}
-
-void EmmaEventTreeReader::DrawTextNdc(std::string s, double x, double y, double size, Color_t col, Float_t tangle){
-	TLatex *t = new TLatex(0,0,s.c_str());
-	t->SetTextAngle(tangle);
-	t->SetNDC();
-	t->SetX(x);
-	t->SetY(y);
-	t->SetTextSize(size);
-	t->SetTextColor(col);
-	t->Draw();
 }
 
 } /* namespace std */
