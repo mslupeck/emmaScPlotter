@@ -378,10 +378,12 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 		vvh2.push_back(vh2);
 	}
 
+	TH1D* hh = new TH1D("hh","hh",1000,0,1000);
 	// Main event loop
 	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
+		hh->Fill(fs->iFileNumber);
 		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
 		ea.AnalyseLevelMultiplicity(&vZcoord);
 		if(ea.getLevelsPresent() >= 3){
@@ -414,6 +416,9 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 			vvh2.at(itype).at(iz)->Draw("colz");
 		}
 	}
+
+	new TCanvas("cvss","cvss",1600,900);
+	hh->Draw();
 }
 
 void EmmaEventTreeReader::setIgnoreHitsWithoutPattern(bool ignoreHitsWithoutPattern) {
