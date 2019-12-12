@@ -3,6 +3,7 @@
  *
  *  Created on: Dec 3, 2019
  *      Author: mss
+ *  Class holding methods and data fields related to data processing at the event level
  */
 
 #ifndef TEVENTANALYSIS_H_
@@ -28,11 +29,17 @@ private:
 	static constexpr float  DXY_PIXEL = 0.5 * (PIXEL_SIZE + PIXEL_GAP);
 	static constexpr float  EPSILON = 0.01;
 
-	vector<THitStorage> *vHit;
-	TCuts *cuts;
+	vector<THitStorage> *vHit; // pointer to the vector of TTree entries
+	TCuts *cuts;               // class storing cut settings
 
+	// z-coordinates of the system (if 4 detector layers are present in the file
+	// then this vector has 4 entries listing the z-position of each layer)
 	vector<int16_t> *vZcoord;
+
+	// Hit multiplicity of each layer (only available after running AnalyseLevelMultiplicity(..))
 	vector<int16_t> vLevelMultiplicity;
+
+	// Number of layers that have at least one pixel hit
 	int16_t nLevelsPresent;
 
 	bool isPatternPresent(THitStorage* hit);
