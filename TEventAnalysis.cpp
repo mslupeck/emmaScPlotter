@@ -23,7 +23,7 @@ TEventAnalysis::~TEventAnalysis() {
 void TEventAnalysis::AnalyseLevelMultiplicity(vector<int16_t> *vZcoord){
 	this->vZcoord = vZcoord;
 	// Check number of hits per layer
-	vector<int> vLevelMultiplicity(vZcoord->size(), 0);
+	vLevelMultiplicity.insert(vLevelMultiplicity.end(), vZcoord->size(), 0);
 	for(UInt_t ihit=0; ihit<vHit->size(); ihit++){
 		THitStorage* hit = &(vHit->at(ihit));
 		if(cuts->ignoreHitsWithoutPattern && !isPatternPresent(hit)){
@@ -43,6 +43,54 @@ void TEventAnalysis::AnalyseLevelMultiplicity(vector<int16_t> *vZcoord){
 	}
 	for(UInt_t iz=0; iz<vLevelMultiplicity.size(); iz++){
 		if(vLevelMultiplicity.at(iz) > 0){
+			nLevelsPresent++;
+		}
+	}
+}
+
+void TEventAnalysis::AnalyseLevelSc16Multiplicity(vector<int16_t> *vZcoord){
+	this->vZcoord = vZcoord;
+	// Check number of hits per layer
+	vLevelSc16Multiplicity.insert(vLevelSc16Multiplicity.end(), vZcoord->size(), 0);
+	vector<Int_t> vScModulesPresent;
+	for(UInt_t ihit=0; ihit<vHit->size(); ihit++){
+		THitStorage* hit = &(vHit->at(ihit));
+		bool skipHit = false;
+		if(ihit == 0){
+			vScModulesPresent.push_back(hit->scModule);
+		}
+		else{
+			// Check if this hit belongs to the SC16, that was already taken into account
+			for(UInt_t isc=0; isc<vScModulesPresent.size(); isc++){
+				if(vScModulesPresent.at(isc) == hit->scModule){
+					skipHit = true;
+				}
+			}
+		}
+		if(skipHit){
+			continue;
+		}
+		else{
+			vScModulesPresent.push_back(hit->scModule);
+		}
+
+		if(cuts->ignoreHitsWithoutPattern && !isPatternPresent(hit)){
+			continue;
+		}
+		if(cuts->ignoreHitsWithoutTiming && !isTimePresent(hit)){
+			continue;
+		}
+		if(cuts->acceptHitsFromPromptPeakOnly && !isTimeWithinPromptPeak(hit)){
+			continue;
+		}
+		for(UInt_t iz=0; iz<vZcoord->size(); iz++){
+			if(vZcoord->at(iz) == hit->z){
+				vLevelSc16Multiplicity.at(iz)++;
+			}
+		}
+	}
+	for(UInt_t iz=0; iz<vLevelSc16Multiplicity.size(); iz++){
+		if(vLevelSc16Multiplicity.at(iz) > 0){
 			nLevelsPresent++;
 		}
 	}
@@ -110,7 +158,25 @@ void TEventAnalysis::FillHbTbHistos(vector<int> &vTimeCnt, vector<int> &vHbCnt, 
 	}
 }
 
-void TEventAnalysis::FillRawScTimeHistos(vector<TH2D*> &vh2){
+void TEventAnalysis::FillRawScTimeHistos(TH2D* h2){
+	for(UInt_t ihit=0; ihit<vHit->size(); ihit++){
+		THitStorage* hit = &(vHit->at(ihit));
+		if(cuts->ignoreHitsWithoutPattern && !isPatternPresent(hit)){
+			continue;
+		}
+		if(cuts->ignoreHitsWithoutTiming && !isTimePresent(hit)){
+			continue;
+		}
+		if(cuts->acceptHitsFromPromptPeakOnly && !isTimeWithinPromptPeak(hit)){
+			continue;
+		}
+		if(hit->t > EPSILON){
+			h2->Fill(hit->t, nLevelsPresent);
+		}
+	}
+}
+
+double TEventAnalysis::FillAvgHitTime(TH1D* h, int16_t zCoord){
 	double avgT = 0;
 	UInt_t nT = 0;
 	for(UInt_t ihit=0; ihit<vHit->size(); ihit++){
@@ -124,33 +190,14 @@ void TEventAnalysis::FillRawScTimeHistos(vector<TH2D*> &vh2){
 		if(cuts->acceptHitsFromPromptPeakOnly && !isTimeWithinPromptPeak(hit)){
 			continue;
 		}
-		if(hit->t > EPSILON){
-			vh2.at(0)->Fill(hit->t, nLevelsPresent);
+		if((hit->z == zCoord) && (hit->t > EPSILON)){
 			avgT += hit->t;
 			nT++;
 		}
 	}
 	avgT /= nT;
-	double rmsT = 0;
-	for(UInt_t ihit=0; ihit<vHit->size(); ihit++){
-		THitStorage* hit = &(vHit->at(ihit));
-		if(cuts->ignoreHitsWithoutPattern && !isPatternPresent(hit)){
-			continue;
-		}
-		if(cuts->ignoreHitsWithoutTiming && !isTimePresent(hit)){
-			continue;
-		}
-		if(cuts->acceptHitsFromPromptPeakOnly && !isTimeWithinPromptPeak(hit)){
-			continue;
-		}
-		if(hit->t > EPSILON){
-			rmsT += TMath::Power(hit->t-avgT, 2);
-		}
-	}
-	rmsT /= nT;
-	rmsT = TMath::Sqrt(rmsT);
-	vh2.at(1)->Fill(avgT, nLevelsPresent);
-	vh2.at(2)->Fill(rmsT, nLevelsPresent);
+	h->Fill(avgT);
+	return avgT;
 }
 
 bool TEventAnalysis::isPatternPresent(THitStorage* hit){
@@ -172,6 +219,10 @@ int16_t TEventAnalysis::getLevelsPresent() const {
 
 const vector<int16_t>& TEventAnalysis::getLevelMultiplicity() const {
 	return vLevelMultiplicity;
+}
+
+const vector<int16_t>& TEventAnalysis::getLevelSc16Multiplicity() const {
+	return vLevelSc16Multiplicity;
 }
 
 } /* namespace std */

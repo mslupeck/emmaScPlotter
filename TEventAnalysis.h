@@ -38,6 +38,7 @@ private:
 
 	// Hit multiplicity of each layer (only available after running AnalyseLevelMultiplicity(..))
 	vector<int16_t> vLevelMultiplicity;
+	vector<int16_t> vLevelSc16Multiplicity;
 
 	// Number of layers that have at least one pixel hit
 	int16_t nLevelsPresent;
@@ -51,13 +52,16 @@ public:
 	virtual ~TEventAnalysis();
 
 	void AnalyseLevelMultiplicity(vector<int16_t> *vZcoord);
+	void AnalyseLevelSc16Multiplicity(vector<int16_t> *vZcoord);
 	void FillLayerHistos(vector<TH2D*> &vh2);
 	void FillHbTbHistos(vector<int> &vTimeCnt, vector<int> &vHbCnt, vector<int> &vTimeAndHbCnt, vector<int> &vTimeOrHbCnt);
-	void FillRawScTimeHistos(vector<TH2D*> &vh2);
+	void FillRawScTimeHistos(TH2D* vh2);
+	double FillAvgHitTime(TH1D* h, int16_t zCoord);
 
 	// Setters / getters
 	int16_t getLevelsPresent() const;
 	const vector<int16_t>& getLevelMultiplicity() const;
+	const vector<int16_t>& getLevelSc16Multiplicity() const;
 };
 
 } /* namespace std */

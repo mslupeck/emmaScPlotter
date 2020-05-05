@@ -22,9 +22,9 @@
 #include <TH2D.h>
 #include <TAxis.h>
 #include <TStyle.h>
+#include <TRandom3.h>
 
 #include "TFileStorage.h"
-#include "TEventAnalysis.h"
 #include "TCuts.h"
 #include "common.h"
 
@@ -33,6 +33,8 @@ namespace std {
 class EmmaEventTreeReader {
 private:
 	string filePath;
+	string treeName;
+	string objectName;
 	string fileBaseName;
 	vector<TFileStorage*> vfs;     // copy of the file contents from the tree to memory
 	TCuts cuts;
@@ -40,18 +42,22 @@ private:
 	vector<int16_t> vZcoord;
 	void ListPlaneCoords(vector<int16_t>& vout, Int_t evnLimit=100);
 
+	vector<Color_t> vCol; // set of colors for histos
+
 public:
 	EmmaEventTreeReader();
 	virtual ~EmmaEventTreeReader();
 
-	int ReadTreeFromRootFile(const string &filePath, const string &treeName, const string &objectName);
+	int ReadTreeFromRootFile();
 
 	void PrintStorageContents(ostream &out, int64_t evn);
 
 	void AnalysePatternTimingCorrelation();
-	void AnalyseEventTimeSpectrum();
+	void AnalyseEventTimeDiffSpectrum();
 	void AnalyseRawScTimeSpectrum();
 	void AnalyseMultiplicityPerLevel();
+	void AnalyseMultiplicityCorrelationBetweenLevels();
+	void AnalyseTimingBetweenLevels();
 
 	// Cuts
 	void FilterOutBadFiles(vector<int> &viFile);
@@ -60,6 +66,8 @@ public:
 	void setIgnoreHitsWithoutPattern(bool ignoreHitsWithoutPattern);
 	void setIgnoreHitsWithoutTiming(bool ignoreHitsWithoutTiming);
 	void setAcceptHitsFromPromptPeakOnly(bool acceptHitsFromPromptPeakOnly, int t0, int t1);
+
+	void SetInputFileInfo(const string &filePath, const string &treeName, const string &objectName);
 };
 } /* namespace std */
 

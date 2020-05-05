@@ -77,6 +77,18 @@ int cliParams::GetParInt(const std::string& parName) const {
 	return result;
 }
 
+bool cliParams::GetParBool(const std::string& parName) const {
+	bool result;
+	std::stringstream ss;
+	ss << std::boolalpha << GetParString(parName);
+	ss >> result;
+	if(ss.fail()){
+		std::cout << "<E> cliParams::GetParameterBool(): Conversion of parameter " << parName << " (" << ss.str() << ") to bool failed." << std::endl;
+		return -999999;
+	}
+	return result;
+}
+
 float cliParams::GetParFloat(const std::string& parName) const {
 	float result;
 	std::stringstream ss;
@@ -87,6 +99,18 @@ float cliParams::GetParFloat(const std::string& parName) const {
 		return -999999;
 	}
 	return result;
+}
+
+bool cliParams::IsParDefined(const std::string& parName) const {
+	for(uint16_t i=0; i<vName.size(); i++){
+		if(parName.compare(vName.at(i)) == 0){
+			if(vContent.at(i).size()>0){
+				return true;
+			}
+			return false;
+		}
+	}
+	return false;
 }
 
 void cliParams::PrintPars(std::ostream& out, std::string parPrefix) const {

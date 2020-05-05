@@ -6,20 +6,33 @@
  */
 
 #include "EmmaEventTreeReader.h"
+#include "TEventAnalysis.h"
 
 namespace std {
 
 EmmaEventTreeReader::EmmaEventTreeReader() {
+	vCol.push_back(kRed);
+	vCol.push_back(kMagenta);
+	vCol.push_back(kBlue);
+	vCol.push_back(kBlack);
+	vCol.push_back(kGray+1);
+	for(int icol=5; icol<8; icol++){
+		vCol.push_back(kGreen-2);
+	}
 }
 
 EmmaEventTreeReader::~EmmaEventTreeReader(){
 }
 
-int EmmaEventTreeReader::ReadTreeFromRootFile(const string &filePath, const string &treeName, const string &objectName){
+void EmmaEventTreeReader::SetInputFileInfo(const string &filePath, const string &treeName, const string &objectName){
 	this->filePath = filePath;
+	this->treeName = treeName;
+	this->objectName = objectName;
 	fileBaseName = filePath.substr(filePath.find_last_of('/')+1);
 	fileBaseName = fileBaseName.substr(0, fileBaseName.find_last_of('.'));
+}
 
+int EmmaEventTreeReader::ReadTreeFromRootFile(){
 	cout << "  <I> Opening file: " << filePath << endl;
 	TFile *f = new TFile(filePath.c_str(), "READ"); // try opening the root file
 	if(f == nullptr){
@@ -182,22 +195,39 @@ void EmmaEventTreeReader::AnalysePatternTimingCorrelation(){
 	common::DrawTextNdc(ssnActiveSc16s.str().c_str(), 0.03, 0.02, fontsize, kBlack);
 }
 
-void EmmaEventTreeReader::AnalyseEventTimeSpectrum(){
-	cout << "  <I> EmmaEventTreeReader::AnalyseEventTimeSpectrum" << endl;
+void EmmaEventTreeReader::AnalyseEventTimeDiffSpectrum(){
+	cout << "  <I> EmmaEventTreeReader::AnalyseEventTimeDiffSpectrum" << endl;
 	string hName = "eventTimeDiff";
-	TH1D* hEventTime = new TH1D(hName.c_str(), hName.c_str(), 1e6,0,8000);
+	string hName2 = "eventTimeDiffVsFile";
+	TH1D* hEventTime = new TH1D(hName.c_str(), hName.c_str(), 1e6, 0, 8000);
+	TH2D* hEventTimeVsFile = new TH2D(hName2.c_str(), hName2.c_str(), 1e3/4, 0, 8/4, 1e3, 0, 1e3);
 	hEventTime->SetDirectory(0);
+	hEventTimeVsFile->SetDirectory(0);
 
 	// Main event loop
 	int nEntries = vfs.size();
 	Double_t prevEventTime = 0;
+	Int_t prevFileNumber = 0;
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
 		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
 		if(evn>0){
-			hEventTime->Fill((fs->fEventTimeS-prevEventTime)*1e3);
+			if(prevFileNumber == fs->iFileNumber){ // don't check upon the change of run because the event time diff will be negative
+				if(fs->fEventTimeS-prevEventTime < 0){
+					cout << " <W> EmmaEventTreeReader::AnalyseEventTimeDiffSpectrum():" << endl;
+					cout << "       Wth: " << fs->iFileNumber << "   " << fs->fEventTimeS << "  " << prevEventTime << endl;
+				}
+				else if((fs->fEventTimeS-prevEventTime)*1e6 < 80){
+					cout << " <W> EmmaEventTreeReader::AnalyseEventTimeDiffSpectrum():" << endl;
+					cout << "       Events very closeby in time: " << (fs->fEventTimeS-prevEventTime)*1e6 << " us for file: " << fs->iFileNumber+100 << endl;
+					cout << "       Discard the offending file before analysing further" << endl;
+				}
+				hEventTime->Fill((fs->fEventTimeS-prevEventTime)*1e3);
+				hEventTimeVsFile->Fill((fs->fEventTimeS-prevEventTime)*1e3, fs->iFileNumber+100);
+			}
 		}
 		prevEventTime = fs->fEventTimeS;
+		prevFileNumber = fs->iFileNumber;
 	}
 
 	// Plot histo
@@ -242,122 +272,77 @@ void EmmaEventTreeReader::AnalyseEventTimeSpectrum(){
 		stringstream ss3;
 		ss3 << "nTotal = " << nTotal;
 		common::DrawTextNdc(ss3.str().c_str(), 0.5, 0.92, fontsize);
+
+	TCanvas *cVsFiles = new TCanvas((hName2+"_"+fileBaseName).c_str(), (hName+"_"+fileBaseName).c_str(), 1600,800);
+	cVsFiles->cd();
+	gPad->SetLogz();
+	hEventTimeVsFile->Draw("colz");
+	hEventTimeVsFile->GetZaxis()->SetRangeUser(1,100);
 }
 
 void EmmaEventTreeReader::AnalyseRawScTimeSpectrum(){
 	cout << "  <I> EmmaEventTreeReader::AnalyseRawScTimeSpectrum" << endl;
-	vector<TH2D*> vhScTime;
-	vhScTime.push_back(new TH2D("absScTime"    ,"absScTime"    , 55000,0,550000, 4,1,5));
-	vhScTime.push_back(new TH2D("avgScTime"    ,"avgScTime"    , 55000,0,550000, 4,1,5));
-	vhScTime.push_back(new TH2D("rmsScTime"    ,"rmsScTime"    , 55000,0,550000, 4,1,5));
-	for(UInt_t itype=0; itype<vhScTime.size(); itype++){
-		vhScTime.at(itype)->SetDirectory(0);
-	}
+	ListPlaneCoords(vZcoord);
+	int nLevels = vZcoord.size();
+	TH2D* hScTime = new TH2D("absScTime", "absScTime", 55000,0,550000, nLevels,1,nLevels+1);
+	hScTime->SetDirectory(0);
 
 	// Main event loop
-	ListPlaneCoords(vZcoord);
 	int nEntries = vfs.size();
+	Int_t nTotalHits = 0;
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
 		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
 		ea.AnalyseLevelMultiplicity(&vZcoord);
-		ea.FillRawScTimeHistos(vhScTime);
+		ea.FillRawScTimeHistos(hScTime);
+		nTotalHits += fs->vHitPoint.size(); // total #hits without any cuts
 	}
 
 	// Plot histo
-	vector<Color_t> vCol;
-	vCol.push_back(kRed);
-	vCol.push_back(kMagenta);
-	vCol.push_back(kBlue);
-	vCol.push_back(kBlack);
-	const string cvsName = "cRawScT";
-	float lmargin = 0.053, rmargin = 0.038, tmargin = 0.01, bmargin = 0.22;
-	float fontsize = 0.1;
-	float xoffset = 0.85, yoffset = 0.24;
 	gStyle->SetOptStat(0);
-	TCanvas *c = new TCanvas((cvsName+"_"+fileBaseName).c_str(), (cvsName+"_"+fileBaseName).c_str(), 1600,800);
-	c->Divide(1,vhScTime.size());
-	float ymax = 0;
-	for(UInt_t ih=0; ih<vhScTime.size(); ih++){
-		TH2D* h2 = vhScTime.at(ih);
-		if(ymax < h2->GetMaximum()){
-			ymax = h2->GetMaximum();
-		}
-	}
-	TLegend *leg = new TLegend(0.75, bmargin+0.05, 0.95, 1.0-tmargin-0.05);
-	vector<TH1D*> vhAbs;
-	for(UInt_t ih=0; ih<vhScTime.size(); ih++){
-		c->cd(ih+1);
-		TH2D* h2 = vhScTime.at(ih);
-		gPad->SetLogy();
-		bool first = true;
-		for(Int_t iy=1; iy<=h2->GetNbinsY(); iy++){
-			stringstream ssname;
-			ssname << h2->GetName() << "_nLevelsPresent=" << iy;
-			TH1D* h1 = h2->ProjectionX(ssname.str().c_str(), iy, iy);
-			h1->SetDirectory(0);
-			h1->SetLineWidth(2);
-			h1->SetLineColor(vCol.at(iy-1));
-			if(first){
-				common::SetupPad(h1, fontsize, lmargin, rmargin, tmargin, bmargin, xoffset, yoffset);
-				h1->SetTitle("");
-				h1->DrawCopy();
-				h1->GetXaxis()->SetTitle("Time [100 ps]");
-				h1->GetYaxis()->SetTitle("Number of hits");
-				h1->GetYaxis()->SetRangeUser(0.8, ymax*5);
-				string padName = h1->GetName();
-				padName = padName.substr(0, padName.find_first_of('_'));
-				common::DrawTextNdc(padName.c_str(), 0.08, 0.85, fontsize);
-				first = false;
-			}
-			else{
-				h1->DrawCopy("sames");
-			}
-			if(ih == vhScTime.size()-1){
-				string legName = h1->GetName();
-				legName = legName.substr(legName.find_first_of('_')+1);
-				leg->AddEntry(h1, legName.c_str(), "l");
-				leg->Draw();
-			}
-
-			if(ih==0){
-				vhAbs.push_back(h1);
-			}
-		}
-	}
-
-	TCanvas *cAvg = new TCanvas((cvsName+"_"+fileBaseName+"_absOnly").c_str(), (cvsName+"_"+fileBaseName+"_avgOnly").c_str(), 1600,800);
-	cAvg->cd();
+	const string cvsName = "cRawScT";
+	float lmargin = 0.07, rmargin = 0.05, tmargin = 0.01, bmargin = 0.1;
+	float fontsize = 0.045;
+	float xoffset = 1.0, yoffset = 0.7;
+	TLegend *leg = new TLegend(0.1, 0.6, 0.63, 0.94);
+	TCanvas *cAbs = new TCanvas((cvsName+"_"+fileBaseName+"_absOnly").c_str(), (cvsName+"_"+fileBaseName+"_avgOnly").c_str(), 1600,800);
+	cAbs->cd();
 	gPad->SetLogy();
-	TH1D* h = vhAbs.at(0);
-	common::SetupPad(h, 0.045, 0.07, 0.05, 0.01, 0.1, 1.0, 0.7);
-	h->Draw();
-	h->GetXaxis()->SetRangeUser(cuts.promptT0 - 4*(cuts.promptT1-cuts.promptT0), cuts.promptT1 + 12*(cuts.promptT1-cuts.promptT0));
-	for(UInt_t ih=1; ih<vhAbs.size(); ih++){
-		vhAbs.at(ih)->Draw("same");
-	}
+	bool first = true;
+	for(Int_t iy=1; iy<=hScTime->GetNbinsY(); iy++){
+		stringstream ssname;
+		ssname << hScTime->GetName() << "_nLevelsPresent=" << iy;
+		TH1D* h1 = hScTime->ProjectionX(ssname.str().c_str(), iy, iy);
+		h1->SetDirectory(0);
+		h1->SetLineWidth(2);
+		h1->SetLineColor(vCol.at(iy-1));
+		if(first){
+			common::SetupPad(h1, fontsize, lmargin, rmargin, tmargin, bmargin, xoffset, yoffset);
+			h1->SetTitle("");
+			h1->GetXaxis()->SetTitle("Time [100 ps]");
+			h1->GetYaxis()->SetTitle("Number of hits");
+			h1->GetXaxis()->SetRangeUser(cuts.promptT0 - 4*(cuts.promptT1-cuts.promptT0), cuts.promptT1 + 12*(cuts.promptT1-cuts.promptT0));
+			h1->GetYaxis()->SetRangeUser(0.8, hScTime->GetMaximum()*2);
+			h1->DrawCopy();
+			first = false;
+		}
+		else{
+			h1->DrawCopy("sames");
+		}
 
-	// Find total number of hits irrespective of any cuts
-	Int_t nTotalHits = 0;
-	for(int evn=0; evn<nEntries; evn++){
-		TFileStorage *fs = vfs.at(evn);
-		nTotalHits += fs->vHitPoint.size();
-	}
-
-	TLegend *leg2 = new TLegend(0.4, 0.6, 0.93, 0.94);
-	for(UInt_t ih=0; ih<vhAbs.size(); ih++){
-		TH1D* h = vhAbs.at(ih);
-		string histoName = h->GetName();
+		// Legend
+		string histoName = h1->GetName();
 		stringstream ssEntryName;
 		ssEntryName << histoName.substr(histoName.find_first_of('_')+1);
-		double nPeak = h->Integral(h->FindBin(cuts.promptT0), h->FindBin(cuts.promptT1));
+		double nPeak = h1->Integral(h1->FindBin(cuts.promptT0), h1->FindBin(cuts.promptT1));
 		ssEntryName.setf(ios::fixed);
 		ssEntryName << " (" << setprecision(0) << setw(9) << right << nPeak << ", ";
-		ssEntryName << setprecision(1) << 100.0*nPeak/h->Integral(0, h->GetNbinsX()+1) << "%, ";
+		ssEntryName << setprecision(1) << 100.0*nPeak/h1->Integral(0, h1->GetNbinsX()+1) << "%, ";
 		ssEntryName << setprecision(1) << 100.0*nPeak/nTotalHits << "%)";
-		leg2->AddEntry(h, ssEntryName.str().c_str(), "l");
+		leg->AddEntry(h1, ssEntryName.str().c_str(), "l");
 	}
-	leg2->Draw();
+	leg->Draw();
+
 }
 
 void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
@@ -366,6 +351,9 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 	vector<string> sType;
 	sType.push_back("nLayers>=3");
 	sType.push_back("nLayers<=2");
+	sType.push_back("nLayers==3");
+	sType.push_back("nLayers==4");
+	sType.push_back("nLayers==5");
 	ListPlaneCoords(vZcoord);
 	for(UInt_t itype=0; itype<sType.size(); itype++){
 		vector<TH2D*> vh2;
@@ -392,6 +380,15 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 		else{
 			ea.FillLayerHistos(vvh2.at(1));
 		}
+		if(ea.getLevelsPresent() == 3){
+			ea.FillLayerHistos(vvh2.at(2));
+		}
+		else if(ea.getLevelsPresent() == 4){
+			ea.FillLayerHistos(vvh2.at(3));
+		}
+		else if(ea.getLevelsPresent() == 5){
+			ea.FillLayerHistos(vvh2.at(4));
+		}
 	}
 
 	// Drawing
@@ -408,10 +405,15 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 	for(UInt_t itype=0; itype<sType.size(); itype++){
 		stringstream ss;
 		ss << "cMLayer_" << fileBaseName << "_" << sType.at(itype);
-		TCanvas *c = new TCanvas(ss.str().c_str(), ss.str().c_str(), 1600, 900);
-		c->Divide(2,2);
+		TCanvas *c = new TCanvas(ss.str().c_str(), ss.str().c_str(), 1100, 900);
+		c->Divide(2,3);
 		for(UInt_t iz=0; iz<vvh2.at(itype).size(); iz++){
-			c->cd(iz+1);
+			if(iz<=2){
+				c->cd(iz+1);
+			}
+			else{
+				c->cd(iz+2);
+			}
 			vvh2.at(itype).at(iz)->GetZaxis()->SetRangeUser(1, maxCnts);
 			vvh2.at(itype).at(iz)->Draw("colz");
 		}
@@ -419,6 +421,227 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 
 	new TCanvas("cvss","cvss",1600,900);
 	hh->Draw();
+}
+
+void EmmaEventTreeReader::AnalyseMultiplicityCorrelationBetweenLevels(){
+	cout << "  <I> EmmaEventTreeReader::AnalyseMultiplicityCorrelationBetweenLevels()" << endl;
+	vector<TH2D*> vh2;
+	ListPlaneCoords(vZcoord);
+
+	// Setup names/titles for histos and axes
+	vector<string> vsZLevel;
+	for(uint16_t iz=0; iz<vZcoord.size(); iz++){
+		stringstream ss;
+		ss << iz+1 << "(" << vZcoord.at(iz) << ")";
+		vsZLevel.push_back(ss.str());
+	}
+	vector<string> vsHistoType;
+	// The histos will contain correlation in multiplicity between level 1 and other levels
+	for(uint16_t iz=1; iz<vZcoord.size(); iz++){
+		vsHistoType.push_back("Level_");
+		vsHistoType.at(iz-1) += vsZLevel.at(0);
+		vsHistoType.at(iz-1) += "-";
+		vsHistoType.at(iz-1) += vsZLevel.at(iz);
+	}
+
+	// Initialize histos
+	for(UInt_t itype=0; itype<vsHistoType.size(); itype++){
+		vh2.push_back(new TH2D(vsHistoType.at(itype).c_str(), vsHistoType.at(itype).c_str(), 144,0,144, 192,0,192));
+//		vh2.push_back(new TH2D(vsHistoType.at(itype).c_str(), vsHistoType.at(itype).c_str(), 9,0,9, 12,0,12));
+		TH2D* h2 = vh2.at(itype);
+		h2->SetDirectory(0);
+		h2->SetXTitle(vsZLevel.at(0).c_str());
+		h2->SetYTitle(vsZLevel.at(itype+1).c_str());
+	}
+	TH2D* hComplex = new TH2D("h_BOT+TOP_vs_BOT-TOP","BOT+TOP_vs_BOT-TOP", 100,0,100, 100*2,-100,100);
+//	TH2D* hComplex = new TH2D("h_BOT+TOP_vs_BOT-TOP","BOT+TOP_vs_BOT-TOP", 21,0,21, 12*2,-12,12);
+	TH1D* hDiv = new TH1D("hDiv","hDiv", 9,-1.125,1.125);
+	TH1D* hDivRnd = new TH1D("hDivRnd","hDivRnd", 9,-1.125,1.125);
+	TH2D* hComplexRnd = new TH2D("hRnd_BOT+TOP_vs_BOT-TOP","Rnd_BOT+TOP_vs_BOT-TOP", 100,0,100, 100*2,-100,100);
+	TH1D* hMultiDistr = new TH1D("hMultiDistr","hMultiDistr",50,0,50);
+	TH2D* hCorrRnd = new TH2D("hCorrRnd","hCorrRnd",50,0,50,50,0,50);
+
+	// Main event loop
+	int nEntries = vfs.size();
+	for(int evn=0; evn<nEntries; evn++){
+		TFileStorage *fs = vfs.at(evn);
+		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
+/*		ea.AnalyseLevelSc16Multiplicity(&vZcoord);
+ 		for(UInt_t itype=0; itype<vh2.size(); itype++){
+			vh2.at(itype)->Fill(ea.getLevelSc16Multiplicity().at(0), ea.getLevelSc16Multiplicity().at(itype+1));
+		}
+		if((ea.getLevelSc16Multiplicity().at(0) >= 0) && (ea.getLevelSc16Multiplicity().at(4) >= 0)){
+			hComplex->Fill(ea.getLevelSc16Multiplicity().at(0) + ea.getLevelSc16Multiplicity().at(4), ea.getLevelSc16Multiplicity().at(0) - ea.getLevelSc16Multiplicity().at(4));
+		}
+*/
+		ea.AnalyseLevelMultiplicity(&vZcoord);
+ 		for(UInt_t itype=0; itype<vh2.size(); itype++){
+			vh2.at(itype)->Fill(ea.getLevelMultiplicity().at(0), ea.getLevelMultiplicity().at(itype+1));
+		}
+		if((ea.getLevelMultiplicity().at(0) >= 0) && (ea.getLevelMultiplicity().at(4) >= 0)){
+			hComplex->Fill(ea.getLevelMultiplicity().at(0) + ea.getLevelMultiplicity().at(4), ea.getLevelMultiplicity().at(0) - ea.getLevelMultiplicity().at(4));
+		}
+		if((ea.getLevelMultiplicity().at(0) != 0) || (ea.getLevelMultiplicity().at(4) != 0)){
+			float complex = ((float)ea.getLevelMultiplicity().at(0) - (float)ea.getLevelMultiplicity().at(4)) / ((float)ea.getLevelMultiplicity().at(0) + (float)ea.getLevelMultiplicity().at(4));
+			hDiv->Fill(complex);
+		}
+
+
+		// Playing with random numbers
+		int rndTop = round(gRandom->Exp(2.5));
+		int rndBot = round(gRandom->Exp(2.5));
+		hMultiDistr->Fill(rndTop);
+		hMultiDistr->Fill(rndBot);
+		if((rndTop >= 0) && (rndBot >= 0)){
+			hComplexRnd->Fill(rndBot + rndTop, rndBot - rndTop);
+		}
+		if((rndTop != 0) || (rndBot != 0)){
+			float complex = ((float)rndTop-(float)rndBot) / ((float)rndTop+(float)rndBot);
+			hDivRnd->Fill(complex);
+			if(evn<1e4){
+				cout << rndTop << " " << rndTop << " " << complex << endl;
+			}
+		}
+		hCorrRnd->Fill(rndTop,rndBot);
+	}
+
+	// Drawing
+	double maxCnts = 0;
+	for(UInt_t itype=0; itype<vh2.size(); itype++){
+		maxCnts = TMath::Max(maxCnts, vh2.at(itype)->GetMaximum());
+		cout << itype << " " << vh2.at(itype)->GetName() << " " << vh2.at(itype)->GetMaximum() << endl;
+	}
+
+	//gStyle->SetOptStat(0);
+	TCanvas *c = new TCanvas("MultiplicityCorr", "MultiplicityCorr", 1600, 900);
+	c->Divide(2,2);
+	for(UInt_t itype=0; itype<vh2.size(); itype++){
+		c->cd(itype+1);
+		vh2.at(itype)->GetZaxis()->SetRangeUser(1, maxCnts);
+		vh2.at(itype)->Draw("colz");
+		gPad->SetLogz();
+	}
+
+	TCanvas *cComplex = new TCanvas("cComplex", "BOT+TOP_vs_BOT-TOP", 1600, 700);
+	cComplex->Divide(2);
+	cComplex->cd(1);
+	gPad->SetLogz();
+	hComplex->Draw("colz");
+	hComplex->SetTitle("");
+	hComplex->SetXTitle("Multiplicity(BOT+TOP)");
+	hComplex->SetYTitle("Multiplicity(BOT-TOP)");
+	cComplex->cd(2);
+	gPad->SetLogz();
+	hComplexRnd->Draw("colz");
+	hComplexRnd->SetTitle("");
+	hComplexRnd->SetXTitle("Multiplicity(BOT+TOP)");
+	hComplexRnd->SetYTitle("Multiplicity(BOT-TOP)");
+
+	TCanvas *cDiv = new TCanvas("cDiv", "BOT-TOP_/_BOT+TOP", 1600, 900);
+	cDiv->cd();
+	gPad->SetLogy();
+	hDiv->Draw("colz");
+	hDiv->SetTitle("");
+	hDiv->SetLineWidth(2);
+	hDiv->SetLineColor(kBlack);
+	hDiv->SetYTitle("(M_{BOT}-M_{TOP}) / (M_{BOT}+M_{TOP})");
+	hDivRnd->SetLineWidth(2);
+	hDivRnd->SetLineColor(kRed);
+	hDivRnd->Draw("sames");
+
+	TCanvas *cMultiDistr = new TCanvas("cMultiDistr", "cMultiDistr", 1600, 900);
+	cMultiDistr->cd();
+	gPad->SetLogy();
+	hMultiDistr->SetLineWidth(2);
+	hMultiDistr->SetLineColor(kBlack);
+	hMultiDistr->Draw();
+
+	TCanvas *cCorrRnd = new TCanvas("cCorrRnd", "cCorrRnd", 1600, 900);
+	cCorrRnd->cd();
+	gPad->SetLogz();
+	hCorrRnd->Draw("colz");
+}
+
+void EmmaEventTreeReader::AnalyseTimingBetweenLevels(){
+	cout << "  <I> EmmaEventTreeReader::AnalyseTimingBetweenLevels()" << endl;
+	gStyle->SetOptStat("nemr");
+	vector<TH1D*> vhTimingPerLayer;
+	vector<TH1D*> vhAvgTimeDiffBetweenLayers;
+	ListPlaneCoords(vZcoord);
+	vector<double> vAvgTimePerLayer(vZcoord.size(),0);
+	// Setup histo names
+	int datawidth = cuts.promptT1-cuts.promptT0;
+	int bin0 = cuts.promptT0 - 0.2*datawidth;
+	int bin1 = cuts.promptT1 + 0.2*datawidth;
+	for(uint16_t iz=0; iz<vZcoord.size(); iz++){
+		stringstream ss;
+		ss << "Timing_at_Level-" << iz+1 << "-" << vZcoord.at(iz);
+		vhTimingPerLayer.push_back(new TH1D(ss.str().c_str(), ss.str().c_str(), bin1-bin0, bin0, bin1));
+		TH1D* h1 = vhTimingPerLayer.at(iz);
+		h1->SetDirectory(0);
+		h1->SetLineWidth(2);
+		h1->SetLineColor(vCol.at(iz));
+		h1->SetXTitle("Raw TDC time [100 ps]");
+		if(iz<4){
+			stringstream ss2;
+			ss2 << "dt(L5" << "-L" << iz+1 << ")";
+			vhAvgTimeDiffBetweenLayers.push_back(new TH1D(ss2.str().c_str(), ss2.str().c_str(), 2*datawidth, -datawidth, datawidth));
+			TH1D* h = vhAvgTimeDiffBetweenLayers.at(iz);
+			h->SetDirectory(0);
+			h->SetLineWidth(2);
+			h->SetLineColor(vCol.at(iz));
+			h->SetXTitle("Time difference [100 ps]");
+		}
+	}
+
+	// Main event loop
+	int nEntries = vfs.size();
+	for(int evn=0; evn<nEntries; evn++){
+		TFileStorage *fs = vfs.at(evn);
+		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
+		ea.AnalyseLevelMultiplicity(&vZcoord);
+		for(uint16_t iz=0; iz<vZcoord.size(); iz++){
+			vAvgTimePerLayer.at(iz) = ea.FillAvgHitTime(vhTimingPerLayer.at(iz), vZcoord.at(iz));
+		}
+		for(uint16_t iz=0; iz<vZcoord.size()-1; iz++){
+			if((vAvgTimePerLayer.at(4) > 1e-3) && (vAvgTimePerLayer.at(iz) > 1e-3)){
+				vhAvgTimeDiffBetweenLayers.at(iz)->Fill(vAvgTimePerLayer.at(4)-vAvgTimePerLayer.at(iz));
+			}
+		}
+	}
+
+	// Drawing avg time distribution per layer
+	double maxCnts = 0;
+	for(UInt_t ih=0; ih<vhTimingPerLayer.size(); ih++){
+		maxCnts = TMath::Max(maxCnts, vhTimingPerLayer.at(ih)->GetMaximum());
+	}
+	TCanvas *cAvg = new TCanvas("AvgTimePerLayer", "AvgTimePerLayer", 1600, 900);
+	cAvg->cd();
+	gPad->SetLogy();
+	gPad->SetGrid(1,1);
+	for(UInt_t ih=0; ih<vhTimingPerLayer.size(); ih++){
+		TH1D* h = vhTimingPerLayer.at(ih);
+		h->GetYaxis()->SetRangeUser(1, maxCnts*1.1);
+		h->Draw(ih==0?"":"sames");
+		gPad->Update();
+		common::ArrangeStatBox(h,ih,1.0,1.0,0.16,0.22);
+	}
+
+	// Drawing avg time difference between layers
+	for(UInt_t ih=0; ih<vhAvgTimeDiffBetweenLayers.size(); ih++){
+		maxCnts = TMath::Max(maxCnts, vhAvgTimeDiffBetweenLayers.at(ih)->GetMaximum());
+	}
+	TCanvas *cDiff = new TCanvas("TimeDiff", "TimeDiff", 1600, 900);
+	cDiff->cd();
+	gPad->SetLogy();
+	gPad->SetGrid(1,1);
+	for(UInt_t ih=0; ih<vhAvgTimeDiffBetweenLayers.size(); ih++){
+		TH1D* h = vhAvgTimeDiffBetweenLayers.at(ih);
+		h->GetYaxis()->SetRangeUser(1, maxCnts*1.1);
+		h->Draw(ih==0?"":"sames");
+		gPad->Update();
+		common::ArrangeStatBox(h,ih,1.0,1.0,0.18,0.22);
+	}
 }
 
 void EmmaEventTreeReader::setIgnoreHitsWithoutPattern(bool ignoreHitsWithoutPattern) {

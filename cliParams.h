@@ -37,7 +37,9 @@ public:
 
 	std::string GetParString	(const std::string& parName) const;
 	int 		GetParInt		(const std::string& parName) const;
+	bool 		GetParBool		(const std::string& parName) const;
 	float 		GetParFloat		(const std::string& parName) const;
+	bool		IsParDefined	(const std::string& parName) const;
 };
 
 #endif /* GLOBALPARAMS_H_ */
