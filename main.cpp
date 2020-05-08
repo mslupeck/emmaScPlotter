@@ -16,12 +16,13 @@
 #include "common.h"
 #include "cliParser.h"
 #include "EmmaEventTreeReader.h"
+#include "TReconstruct.h"
 
 using namespace std;
 
 void RunBasic(EmmaEventTreeReader &eetr){
 	TApplication theApp("App",0,nullptr);{
-		if(eetr.ReadTreeFromRootFile() < 0) return -1;
+		if(eetr.ReadTreeFromRootFile() < 0) return;
 
 		// Data analysis methods
 //			for(int i=0; i<1e4; i++){
@@ -39,10 +40,22 @@ void RunBasic(EmmaEventTreeReader &eetr){
 
 void RunRawMulti(EmmaEventTreeReader &eetr){
 	TApplication theApp("App",0,nullptr);{
-		if(eetr.ReadTreeFromRootFile() < 0) return -1;
+		if(eetr.ReadTreeFromRootFile() < 0) return;
 		eetr.AnalyseTimingBetweenLevels();
 		eetr.AnalyseMultiplicityPerLevel();
 		eetr.AnalyseMultiplicityCorrelationBetweenLevels();
+	}
+	theApp.SetIdleTimer(10000,"exit()"); // exits the program after 10000 s of inactivity
+	theApp.SetReturnFromRun(true);       //
+	cout << "Running done." << endl;
+	theApp.Run();
+}
+
+void RunReconstruct(EmmaEventTreeReader &eetr){
+	TApplication theApp("App",0,nullptr);{
+		if(eetr.ReadTreeFromRootFile(12) < 0) return;
+		TReconstruct r(&eetr, 10);
+		r.RunReconstruct();
 	}
 	theApp.SetIdleTimer(10000,"exit()"); // exits the program after 10000 s of inactivity
 	theApp.SetReturnFromRun(true);       //
@@ -56,7 +69,7 @@ int main(int argc, char* argv[]){
 	cli.AddPar("m", "Mode of operation", true);
 	cli.GetModeList()->AddPar("basic", "Reads original root file and plots basic test histos");
 	cli.GetModeList()->AddPar("rawMulti", "Reads original root file and plots raw multiplicity histos");
-	cli.GetModeList()->AddPar("track", "Do tracking");
+	cli.GetModeList()->AddPar("reco", "Do event reconstruction");
 	cli.AddPar("i", "Input path", true);
 	cli.AddPar("o", "Output name", true);
 	cli.AddPar("promptT0", "Prompt peak cut - start time [default = -2e9]", false);
@@ -102,8 +115,8 @@ int main(int argc, char* argv[]){
 	else if(cli.GetParString("m").compare("rawMulti")==0){
 		RunRawMulti(eetr);
 	}
-	else if(cli.GetParString("m").compare("track")==0){
-		RunTracking(eetr);
+	else if(cli.GetParString("m").compare("reco")==0){
+		RunReconstruct(eetr);
 	}
 	else{
 		cout << "Unknown mode: " << cli.GetParString("m") << endl;

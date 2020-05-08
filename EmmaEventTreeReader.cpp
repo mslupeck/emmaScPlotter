@@ -32,13 +32,20 @@ void EmmaEventTreeReader::SetInputFileInfo(const string &filePath, const string 
 	fileBaseName = fileBaseName.substr(0, fileBaseName.find_last_of('.'));
 }
 
-int EmmaEventTreeReader::ReadTreeFromRootFile(){
+int EmmaEventTreeReader::ReadTreeFromRootFile(int maxEvents, bool initAllUtilities){
 	cout << "  <I> Opening file: " << filePath << endl;
 	TFile *f = new TFile(filePath.c_str(), "READ"); // try opening the root file
 	if(f == nullptr){
 		cout << "<E> Problems opening file: " << filePath << endl;
 		return -1; // exit program
 	}
+
+	TScMapReader* scm = (TScMapReader*)(f->Get("TScMapReader"));
+	if(scm == nullptr){
+		cout << "<E> Problems opening scMap." << endl;
+		return -1; // exit program
+	}
+	scMap = *scm;
 
 	TTree *t = (TTree*)(f->Get(treeName.c_str())); // get the tree from file
 	if(t == nullptr){
@@ -55,12 +62,19 @@ int EmmaEventTreeReader::ReadTreeFromRootFile(){
 
 	// Copy tree to vector in memory
 	int nEntries = t->GetEntries();
+	if((maxEvents != 0) && nEntries > maxEvents){
+		nEntries = maxEvents;
+	}
 	for(int evn=0; evn<nEntries; evn++){
 		t->GetEntry(evn);
 		vfs.push_back(new TFileStorage(*fs));
 	}
 
 	f->Close();
+
+	if(initAllUtilities){
+		ListPlaneCoords(vZcoord);
+	}
 	return 0;
 }
 
@@ -115,7 +129,7 @@ void EmmaEventTreeReader::AnalysePatternTimingCorrelation(){
 	// Main event loop
 	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
-		TEventAnalysis ea(&(vfs.at(evn)->vHitPoint), &cuts);
+		TEventAnalysis ea(&(vfs.at(evn)->vHitPoint), &cuts, &vZcoord);
 		ea.FillHbTbHistos(vTimeCnt, vHbCnt, vTimeAndHbCnt, vTimeOrHbCnt);
 	}
 
@@ -210,7 +224,7 @@ void EmmaEventTreeReader::AnalyseEventTimeDiffSpectrum(){
 	Int_t prevFileNumber = 0;
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
+		TEventAnalysis ea(&(fs->vHitPoint), &cuts, &vZcoord);
 		if(evn>0){
 			if(prevFileNumber == fs->iFileNumber){ // don't check upon the change of run because the event time diff will be negative
 				if(fs->fEventTimeS-prevEventTime < 0){
@@ -292,8 +306,8 @@ void EmmaEventTreeReader::AnalyseRawScTimeSpectrum(){
 	Int_t nTotalHits = 0;
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
-		ea.AnalyseLevelMultiplicity(&vZcoord);
+		TEventAnalysis ea(&(fs->vHitPoint), &cuts, &vZcoord);
+		ea.AnalyseLevelMultiplicity();
 		ea.FillRawScTimeHistos(hScTime);
 		nTotalHits += fs->vHitPoint.size(); // total #hits without any cuts
 	}
@@ -354,7 +368,6 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 	sType.push_back("nLayers==3");
 	sType.push_back("nLayers==4");
 	sType.push_back("nLayers==5");
-	ListPlaneCoords(vZcoord);
 	for(UInt_t itype=0; itype<sType.size(); itype++){
 		vector<TH2D*> vh2;
 		for(UInt_t iz=0; iz<vZcoord.size(); iz++){
@@ -372,8 +385,8 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
 		hh->Fill(fs->iFileNumber);
-		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
-		ea.AnalyseLevelMultiplicity(&vZcoord);
+		TEventAnalysis ea(&(fs->vHitPoint), &cuts, &vZcoord);
+		ea.AnalyseLevelMultiplicity();
 		if(ea.getLevelsPresent() >= 3){
 			ea.FillLayerHistos(vvh2.at(0));
 		}
@@ -426,7 +439,6 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 void EmmaEventTreeReader::AnalyseMultiplicityCorrelationBetweenLevels(){
 	cout << "  <I> EmmaEventTreeReader::AnalyseMultiplicityCorrelationBetweenLevels()" << endl;
 	vector<TH2D*> vh2;
-	ListPlaneCoords(vZcoord);
 
 	// Setup names/titles for histos and axes
 	vector<string> vsZLevel;
@@ -465,7 +477,7 @@ void EmmaEventTreeReader::AnalyseMultiplicityCorrelationBetweenLevels(){
 	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
+		TEventAnalysis ea(&(fs->vHitPoint), &cuts, &vZcoord);
 /*		ea.AnalyseLevelSc16Multiplicity(&vZcoord);
  		for(UInt_t itype=0; itype<vh2.size(); itype++){
 			vh2.at(itype)->Fill(ea.getLevelSc16Multiplicity().at(0), ea.getLevelSc16Multiplicity().at(itype+1));
@@ -474,15 +486,15 @@ void EmmaEventTreeReader::AnalyseMultiplicityCorrelationBetweenLevels(){
 			hComplex->Fill(ea.getLevelSc16Multiplicity().at(0) + ea.getLevelSc16Multiplicity().at(4), ea.getLevelSc16Multiplicity().at(0) - ea.getLevelSc16Multiplicity().at(4));
 		}
 */
-		ea.AnalyseLevelMultiplicity(&vZcoord);
+		ea.AnalyseLevelMultiplicity();
  		for(UInt_t itype=0; itype<vh2.size(); itype++){
-			vh2.at(itype)->Fill(ea.getLevelMultiplicity().at(0), ea.getLevelMultiplicity().at(itype+1));
+			vh2.at(itype)->Fill(ea.getLevelPixelMultiplicity().at(0), ea.getLevelPixelMultiplicity().at(itype+1));
 		}
-		if((ea.getLevelMultiplicity().at(0) >= 0) && (ea.getLevelMultiplicity().at(4) >= 0)){
-			hComplex->Fill(ea.getLevelMultiplicity().at(0) + ea.getLevelMultiplicity().at(4), ea.getLevelMultiplicity().at(0) - ea.getLevelMultiplicity().at(4));
+		if((ea.getLevelPixelMultiplicity().at(0) >= 0) && (ea.getLevelPixelMultiplicity().at(4) >= 0)){
+			hComplex->Fill(ea.getLevelPixelMultiplicity().at(0) + ea.getLevelPixelMultiplicity().at(4), ea.getLevelPixelMultiplicity().at(0) - ea.getLevelPixelMultiplicity().at(4));
 		}
-		if((ea.getLevelMultiplicity().at(0) != 0) || (ea.getLevelMultiplicity().at(4) != 0)){
-			float complex = ((float)ea.getLevelMultiplicity().at(0) - (float)ea.getLevelMultiplicity().at(4)) / ((float)ea.getLevelMultiplicity().at(0) + (float)ea.getLevelMultiplicity().at(4));
+		if((ea.getLevelPixelMultiplicity().at(0) != 0) || (ea.getLevelPixelMultiplicity().at(4) != 0)){
+			float complex = ((float)ea.getLevelPixelMultiplicity().at(0) - (float)ea.getLevelPixelMultiplicity().at(4)) / ((float)ea.getLevelPixelMultiplicity().at(0) + (float)ea.getLevelPixelMultiplicity().at(4));
 			hDiv->Fill(complex);
 		}
 
@@ -567,7 +579,6 @@ void EmmaEventTreeReader::AnalyseTimingBetweenLevels(){
 	gStyle->SetOptStat("nemr");
 	vector<TH1D*> vhTimingPerLayer;
 	vector<TH1D*> vhAvgTimeDiffBetweenLayers;
-	ListPlaneCoords(vZcoord);
 	vector<double> vAvgTimePerLayer(vZcoord.size(),0);
 	// Setup histo names
 	int datawidth = cuts.promptT1-cuts.promptT0;
@@ -598,8 +609,8 @@ void EmmaEventTreeReader::AnalyseTimingBetweenLevels(){
 	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), &cuts);
-		ea.AnalyseLevelMultiplicity(&vZcoord);
+		TEventAnalysis ea(&(fs->vHitPoint), &cuts, &vZcoord);
+		ea.AnalyseLevelMultiplicity();
 		for(uint16_t iz=0; iz<vZcoord.size(); iz++){
 			vAvgTimePerLayer.at(iz) = ea.FillAvgHitTime(vhTimingPerLayer.at(iz), vZcoord.at(iz));
 		}
@@ -658,6 +669,22 @@ void EmmaEventTreeReader::setAcceptHitsFromPromptPeakOnly(bool acceptHitsFromPro
 	cuts.promptT1 = t1;
 }
 
+vector<TFileStorage*>* EmmaEventTreeReader::GetFileStorage(){
+	return &vfs;
+}
+
+vector<double>* EmmaEventTreeReader::getZcoord(){
+	return &vZcoord;
+}
+
+TScMapReader* EmmaEventTreeReader::getScMap() {
+	return &scMap;
+}
+
+TCuts* EmmaEventTreeReader::GetCuts(){
+	return &cuts;
+}
+
 void EmmaEventTreeReader::FilterOutBadFiles(vector<int> &viFile){
 	cout << "  <I> EmmaEventTreeReader::FilterOutBadFiles(): ";
 	for(UInt_t i=0; i<viFile.size(); i++){
@@ -688,12 +715,10 @@ void EmmaEventTreeReader::FilterOutBadFiles(vector<int> &viFile){
 	}
 }
 
-
-
 // ---------------------------
 // ----- Private methods -----
 // ---------------------------
-void EmmaEventTreeReader::ListPlaneCoords(vector<int16_t>& vout, Int_t evnLimit){
+void EmmaEventTreeReader::ListPlaneCoords(vector<double>& vout, Int_t evnLimit){
 	vector<int16_t> v;
 	vout.clear();
 
@@ -710,11 +735,11 @@ void EmmaEventTreeReader::ListPlaneCoords(vector<int16_t>& vout, Int_t evnLimit)
 	sort(v.begin(), v.end());
 
 	//remove closeby coordinates, because they belong to the same plane
-	const float SAME_PLANE_EPSILON = 1;
+	const float samePlaneEpsilon = 1;
 	int16_t prevv=v.at(0);
 	vout.push_back(prevv);
 	for(uint16_t i=1; i<v.size(); i++){
-		if(fabs(v.at(i)-prevv) > SAME_PLANE_EPSILON){
+		if(fabs(v.at(i)-prevv) > samePlaneEpsilon){
 			vout.push_back(v.at(i));
 		}
 		prevv = v.at(i);

@@ -24,6 +24,7 @@
 #include <TStyle.h>
 #include <TRandom3.h>
 
+#include "TScMapReader.h"
 #include "TFileStorage.h"
 #include "TCuts.h"
 #include "common.h"
@@ -37,10 +38,11 @@ private:
 	string objectName;
 	string fileBaseName;
 	vector<TFileStorage*> vfs;     // copy of the file contents from the tree to memory
+	TScMapReader scMap;
 	TCuts cuts;
 
-	vector<int16_t> vZcoord;
-	void ListPlaneCoords(vector<int16_t>& vout, Int_t evnLimit=100);
+	vector<double> vZcoord;
+	void ListPlaneCoords(vector<double>& vout, Int_t evnLimit=100);
 
 	vector<Color_t> vCol; // set of colors for histos
 
@@ -48,10 +50,11 @@ public:
 	EmmaEventTreeReader();
 	virtual ~EmmaEventTreeReader();
 
-	int ReadTreeFromRootFile();
+	int ReadTreeFromRootFile(int maxEvents = 0, bool initAllUtilities = true);
 
 	void PrintStorageContents(ostream &out, int64_t evn);
 
+	// Pre-analysis checks
 	void AnalysePatternTimingCorrelation();
 	void AnalyseEventTimeDiffSpectrum();
 	void AnalyseRawScTimeSpectrum();
@@ -68,6 +71,10 @@ public:
 	void setAcceptHitsFromPromptPeakOnly(bool acceptHitsFromPromptPeakOnly, int t0, int t1);
 
 	void SetInputFileInfo(const string &filePath, const string &treeName, const string &objectName);
+	vector<TFileStorage*>* GetFileStorage();
+	vector<double>* getZcoord();
+	TCuts* GetCuts();
+	TScMapReader* getScMap();
 };
 } /* namespace std */
 
