@@ -10,6 +10,8 @@
 #include <TVirtualFitter.h>
 #include <Math/Vector3D.h>
 #include <assert.h>
+#include <TVector3.h>
+#include <TMath.h>
 
 TTrack::TTrack() {
 	for(int ipar=0; ipar<nPars; ipar++){
@@ -18,6 +20,8 @@ TTrack::TTrack() {
 	}
 	amin = 0;
 	globcc = 0;
+	phi = 0;
+	theta = 0;
 }
 
 // calculate distance line-point
@@ -127,6 +131,10 @@ void TTrack::Line3Dfit(TGraph2D *gr)
 		parFit[i] = min->GetParameter(i);
 	}
 	min->Delete();
+
+	TVector3 *v3 = new TVector3(parFit[1], parFit[3], 1);
+	theta = 180.*v3->Theta()/TMath::Pi();
+	phi = 180.*v3->Phi()/TMath::Pi();
 }
 
 double TTrack::getAmin() const {
@@ -145,4 +153,12 @@ void TTrack::setParStart(double parStart[4]){
 	for(int ipar=0; ipar<nPars; ipar++){
 		pStart[ipar] = parStart[ipar];
 	}
+}
+
+float TTrack::getPhi() const {
+	return phi;
+}
+
+float TTrack::getTheta() const {
+	return theta;
 }

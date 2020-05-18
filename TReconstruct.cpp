@@ -26,15 +26,22 @@ void TReconstruct::RunReconstruct(){
 	vector<TFileStorage*>* vfs = eetr->GetFileStorage();
 	int nEntries = vfs->size();
 	for(int evn=0; evn<nEntries; evn++){
-		cout << endl << "=== " << evn << " =============================================" << endl;
-		TEventAnalysis ea(&(vfs->at(evn)->vHitPoint), eetr->GetCuts(), eetr->getZcoord());
-		ea.AnalyseLevelMultiplicity();
+//		cout << endl << "=== " << evn << " =============================================" << endl;
+		TEventAnalysis eaOrg(&(vfs->at(evn)->vHitPoint), evn, eetr->getFileBaseName(), eetr->GetCuts(), eetr->getZcoord());
+		eaOrg.AnalyseLevelMultiplicity();
 		if(verbose >= 2){
 			if((evn%100000) == 0){
 				cout << " EvnProgress: " << evn << "/" << nEntries << " [" << ((float)round(1000.0*evn/nEntries))*0.1 << "%]" << endl;
 			}
 		}
-		visualizer.SaveForVis(&ea);
+		visualizer.SaveForVis(&eaOrg);
+//		TEventAnalysis eaProcessed(eaOrg);
+
+//		eaProcessed.DeleteHitsWithBadTiming();
+
+//		eaOrg.PrintHits();
+//		cout << "=== " << endl;
+//		eaProcessed.PrintHits();
 
 		/*
 		eOrg->DeleteHitsWithBadTiming();
@@ -72,7 +79,7 @@ void TReconstruct::RunReconstruct(){
 		*/
 	}
 
-	visualizer.Visualize(eetr->getScMap());
+	visualizer.VisualizeMulti(eetr->getScMap());
 
 /*	bool doVisualize = true;
 	uint16_t evn=12;

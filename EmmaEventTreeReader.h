@@ -42,7 +42,7 @@ private:
 	TCuts cuts;
 
 	vector<double> vZcoord;
-	void ListPlaneCoords(vector<double>& vout, Int_t evnLimit=100);
+	void ListPlaneCoords(vector<double>& vout, Int_t evnLimit=1000);
 
 	vector<Color_t> vCol; // set of colors for histos
 
@@ -50,7 +50,7 @@ public:
 	EmmaEventTreeReader();
 	virtual ~EmmaEventTreeReader();
 
-	int ReadTreeFromRootFile(int maxEvents = 0, bool initAllUtilities = true);
+	int ReadTreeFromRootFile(bool initAllUtilities = true);
 
 	void PrintStorageContents(ostream &out, int64_t evn);
 
@@ -69,12 +69,14 @@ public:
 	void setIgnoreHitsWithoutPattern(bool ignoreHitsWithoutPattern);
 	void setIgnoreHitsWithoutTiming(bool ignoreHitsWithoutTiming);
 	void setAcceptHitsFromPromptPeakOnly(bool acceptHitsFromPromptPeakOnly, int t0, int t1);
+	void setEventNumberCuts(int n0, int nMax);
 
 	void SetInputFileInfo(const string &filePath, const string &treeName, const string &objectName);
 	vector<TFileStorage*>* GetFileStorage();
 	vector<double>* getZcoord();
 	TCuts* GetCuts();
 	TScMapReader* getScMap();
+	string& getFileBaseName();
 };
 } /* namespace std */
 

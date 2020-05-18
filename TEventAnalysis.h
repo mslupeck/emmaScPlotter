@@ -30,8 +30,11 @@ private:
 	static constexpr float  DXY_PIXEL = 0.5 * (PIXEL_SIZE + PIXEL_GAP);
 	static constexpr float  EPSILON = 0.01;
 
+	bool deletePointers;       // if the event is copied, it should delete all the pointers
 	vector<THitStorage> *vHit; // pointer to the vector of TTree entries
 	TCuts *cuts;               // class storing cut settings
+	int64_t eventNumber;
+	string runNumber;
 
 	// z-coordinates of the system (if 4 detector layers are present in the file
 	// then this vector has 4 entries listing the z-position of each layer)
@@ -54,7 +57,8 @@ private:
 	bool isWithinCuts(THitStorage* hit);
 
 public:
-	TEventAnalysis(vector<THitStorage> *vHit, TCuts *cuts, vector<double> *vZcoord = nullptr);
+	TEventAnalysis(vector<THitStorage> *vHit, int64_t eventNumber, string& runNumber, TCuts *cuts, vector<double> *vZcoord = nullptr);
+	TEventAnalysis(TEventAnalysis &ea);
 	virtual ~TEventAnalysis();
 
 	void AnalyseLevelMultiplicity();
@@ -67,6 +71,9 @@ public:
 	// Tracking / visualization
 	void FillHitPosGraph(vector<TGraph2D*> &vgr);
 
+	// Filtering
+	void DeleteHitsWithBadTiming(double tthr=250); 	// 250 channels == 22 ns for non-calibrated detectors + 3 ns for TOF
+
 	// Setters / getters
 	int16_t getLevelsPresent() const;
 	const vector<int16_t>& getLevelPixelMultiplicity() const;
@@ -74,6 +81,14 @@ public:
 	const vector<double>& getAvgX() const;
 	const vector<double>& getAvgY() const;
 	const vector<double>& getZcoord() const;
+	const vector<double>& getSigma2X() const;
+	const vector<double>& getSigma2Y() const;
+	const vector<THitStorage>* getHit();
+	const TCuts* getCuts();
+	int64_t getEventNumber() const;
+	const string& getRunNumber() const;
+
+	void PrintHits();
 };
 
 } /* namespace std */

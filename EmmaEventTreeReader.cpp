@@ -32,7 +32,7 @@ void EmmaEventTreeReader::SetInputFileInfo(const string &filePath, const string 
 	fileBaseName = fileBaseName.substr(0, fileBaseName.find_last_of('.'));
 }
 
-int EmmaEventTreeReader::ReadTreeFromRootFile(int maxEvents, bool initAllUtilities){
+int EmmaEventTreeReader::ReadTreeFromRootFile(bool initAllUtilities){
 	cout << "  <I> Opening file: " << filePath << endl;
 	TFile *f = new TFile(filePath.c_str(), "READ"); // try opening the root file
 	if(f == nullptr){
@@ -60,12 +60,17 @@ int EmmaEventTreeReader::ReadTreeFromRootFile(int maxEvents, bool initAllUtiliti
 		return -1; // exit program
 	}
 
-	// Copy tree to vector in memory
+	// Adjust the event limits provided from the command line
 	int nEntries = t->GetEntries();
-	if((maxEvents != 0) && nEntries > maxEvents){
-		nEntries = maxEvents;
+	if(cuts.n0 < 0){
+		cuts.n0 = 0;
 	}
-	for(int evn=0; evn<nEntries; evn++){
+	if((cuts.nMax > 0) && (nEntries > cuts.nMax)){
+		nEntries = cuts.n0 + cuts.nMax;
+	}
+
+	// Copy tree to vector in memory
+	for(int evn=cuts.n0; evn<nEntries; evn++){
 		t->GetEntry(evn);
 		vfs.push_back(new TFileStorage(*fs));
 	}
@@ -129,7 +134,7 @@ void EmmaEventTreeReader::AnalysePatternTimingCorrelation(){
 	// Main event loop
 	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
-		TEventAnalysis ea(&(vfs.at(evn)->vHitPoint), &cuts, &vZcoord);
+		TEventAnalysis ea(&(vfs.at(evn)->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
 		ea.FillHbTbHistos(vTimeCnt, vHbCnt, vTimeAndHbCnt, vTimeOrHbCnt);
 	}
 
@@ -224,7 +229,7 @@ void EmmaEventTreeReader::AnalyseEventTimeDiffSpectrum(){
 	Int_t prevFileNumber = 0;
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), &cuts, &vZcoord);
+		TEventAnalysis ea(&(fs->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
 		if(evn>0){
 			if(prevFileNumber == fs->iFileNumber){ // don't check upon the change of run because the event time diff will be negative
 				if(fs->fEventTimeS-prevEventTime < 0){
@@ -306,7 +311,7 @@ void EmmaEventTreeReader::AnalyseRawScTimeSpectrum(){
 	Int_t nTotalHits = 0;
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), &cuts, &vZcoord);
+		TEventAnalysis ea(&(fs->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
 		ea.AnalyseLevelMultiplicity();
 		ea.FillRawScTimeHistos(hScTime);
 		nTotalHits += fs->vHitPoint.size(); // total #hits without any cuts
@@ -385,7 +390,7 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
 		hh->Fill(fs->iFileNumber);
-		TEventAnalysis ea(&(fs->vHitPoint), &cuts, &vZcoord);
+		TEventAnalysis ea(&(fs->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
 		ea.AnalyseLevelMultiplicity();
 		if(ea.getLevelsPresent() >= 3){
 			ea.FillLayerHistos(vvh2.at(0));
@@ -477,7 +482,7 @@ void EmmaEventTreeReader::AnalyseMultiplicityCorrelationBetweenLevels(){
 	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), &cuts, &vZcoord);
+		TEventAnalysis ea(&(fs->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
 /*		ea.AnalyseLevelSc16Multiplicity(&vZcoord);
  		for(UInt_t itype=0; itype<vh2.size(); itype++){
 			vh2.at(itype)->Fill(ea.getLevelSc16Multiplicity().at(0), ea.getLevelSc16Multiplicity().at(itype+1));
@@ -609,7 +614,7 @@ void EmmaEventTreeReader::AnalyseTimingBetweenLevels(){
 	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), &cuts, &vZcoord);
+		TEventAnalysis ea(&(fs->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
 		ea.AnalyseLevelMultiplicity();
 		for(uint16_t iz=0; iz<vZcoord.size(); iz++){
 			vAvgTimePerLayer.at(iz) = ea.FillAvgHitTime(vhTimingPerLayer.at(iz), vZcoord.at(iz));
@@ -669,12 +674,21 @@ void EmmaEventTreeReader::setAcceptHitsFromPromptPeakOnly(bool acceptHitsFromPro
 	cuts.promptT1 = t1;
 }
 
+void EmmaEventTreeReader::setEventNumberCuts(int n0, int nMax){
+	cuts.n0 = n0;
+	cuts.nMax = nMax;
+}
+
 vector<TFileStorage*>* EmmaEventTreeReader::GetFileStorage(){
 	return &vfs;
 }
 
 vector<double>* EmmaEventTreeReader::getZcoord(){
 	return &vZcoord;
+}
+
+string& EmmaEventTreeReader::getFileBaseName() {
+	return fileBaseName;
 }
 
 TScMapReader* EmmaEventTreeReader::getScMap() {

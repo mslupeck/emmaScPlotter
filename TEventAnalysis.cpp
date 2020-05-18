@@ -10,19 +10,67 @@
 
 namespace std {
 
-TEventAnalysis::TEventAnalysis(vector<THitStorage> *vHit, TCuts *cuts, vector<double> *vZcoord) {
+TEventAnalysis::TEventAnalysis(vector<THitStorage> *vHit, int64_t eventNumber, string& runNumber, TCuts *cuts, vector<double> *vZcoord) {
+	deletePointers = false;
 	this->vZcoord = vZcoord;
 	this->vHit = vHit;
 	nLevelsPresent = 0;
 	this->cuts = cuts;
+	this->eventNumber = eventNumber;
+	this->runNumber = runNumber;
+}
+
+TEventAnalysis::TEventAnalysis(TEventAnalysis &ea){
+	nLevelsPresent = ea.getLevelsPresent();
+	deletePointers = true;
+	vHit = new vector<THitStorage>;
+	eventNumber = ea.eventNumber;
+	runNumber = ea.runNumber;
+	for(UInt_t i=0; i<ea.getHit()->size(); i++){
+		vHit->push_back(ea.getHit()->at(i));
+	}
+	cuts = new TCuts(ea.getCuts());
+	vZcoord = new vector<double>;
+	for(UInt_t i=0; i<ea.getZcoord().size(); i++){
+		vZcoord->push_back(ea.getZcoord().at(i));
+	}
+	for(UInt_t i=0; i<ea.getLevelPixelMultiplicity().size(); i++){
+		vLevelPixelMultiplicity.push_back(ea.getLevelPixelMultiplicity().at(i));
+	}
+	for(UInt_t i=0; i<ea.getLevelSc16Multiplicity().size(); i++){
+		vLevelSc16Multiplicity.push_back(ea.getLevelSc16Multiplicity().at(i));
+	}
+	for(UInt_t i=0; i<ea.getAvgX().size(); i++){
+		vAvgX.push_back(ea.getAvgX().at(i));
+	}
+	for(UInt_t i=0; i<ea.getAvgY().size(); i++){
+		vAvgY.push_back(ea.getAvgY().at(i));
+	}
+	for(UInt_t i=0; i<ea.getSigma2X().size(); i++){
+		vSigma2X.push_back(ea.getSigma2X().at(i));
+	}
+	for(UInt_t i=0; i<ea.getSigma2Y().size(); i++){
+		vSigma2Y.push_back(ea.getSigma2Y().at(i));
+	}
 }
 
 TEventAnalysis::~TEventAnalysis() {
-	// TODO Auto-generated destructor stub
+	if(deletePointers){
+		delete vHit;
+		delete cuts;
+		delete vZcoord;
+	}
 }
 
 void TEventAnalysis::AnalyseLevelMultiplicity(){
 	// Enlarge the vectors to have the size of number of layers
+	if(vAvgX.size() != 0){
+		vLevelPixelMultiplicity.erase(vLevelPixelMultiplicity.begin(), vLevelPixelMultiplicity.end());
+		vAvgX.erase(vAvgX.begin(), vAvgX.end());
+		vAvgY.erase(vAvgY.begin(), vAvgY.end());
+		vSigma2X.erase(vSigma2X.begin(), vSigma2X.end());
+		vSigma2Y.erase(vSigma2Y.begin(), vSigma2Y.end());
+	}
 	vLevelPixelMultiplicity.insert(vLevelPixelMultiplicity.end(), vZcoord->size(), 0);
 	vAvgX.insert(vAvgX.end(), vZcoord->size(), 0);
 	vAvgY.insert(vAvgY.end(), vZcoord->size(), 0);
@@ -200,7 +248,7 @@ void TEventAnalysis::FillHitPosGraph(vector<TGraph2D*> &vgr){
 	}
 
 	// Allocate the number of points to graphs
-	for(int igr=0; igr<vgr.size(); igr++){
+	for(UInt_t igr=0; igr<vgr.size(); igr++){
 		vgr.at(igr)->Set(vn.at(igr));
 	}
 
@@ -219,8 +267,53 @@ void TEventAnalysis::FillHitPosGraph(vector<TGraph2D*> &vgr){
 	}
 }
 
+void TEventAnalysis::DeleteHitsWithBadTiming(double tthr){
+	// Find pairs, with the time difference > tthr and remove the point further away from average for this event
+	bool restart = true;
+	while(restart){
+		restart = false;
+		uint16_t vPointsSize = vHit->size();
 
+		// Calculate average time (but count time of multiple pixels in a single SC16 only once)
+		double avg=0;
+		vector<int16_t> vUniqueScModule;
+		for(uint16_t ih=0; ih<vPointsSize; ih++){
+			THitStorage* hs = &(vHit->at(ih));
+			bool scModulePresent = false;
+			for(uint16_t isc=0; isc<vUniqueScModule.size(); isc++){
+				if(vUniqueScModule.at(isc) == hs->scModule){
+					scModulePresent = true;
+				}
+			}
+			if(!scModulePresent){
+				vUniqueScModule.push_back(hs->scModule);
+				avg += hs->t;
+			}
+		}
+		avg /= vUniqueScModule.size();
 
+		for(uint16_t ih1=0; ih1<vPointsSize; ih1++){
+			THitStorage* hs1 = &(vHit->at(ih1));
+			for(uint16_t ih2=ih1+1; ih2<vPointsSize; ih2++){
+				THitStorage* hs2 = &(vHit->at(ih2));
+				int dt = abs(hs1->t - hs2->t);
+				if(dt > tthr){
+					double davgp1 = fabs(avg - hs1->t);
+					double davgp2 = fabs(avg - hs2->t);
+					if(davgp1 > davgp2){
+						vHit->erase(vHit->begin()+ih1);
+					}
+					else{
+						vHit->erase(vHit->begin()+ih2);
+					}
+					restart=true;
+					break;
+				}
+			}
+			if(restart) break;
+		}
+	}
+}
 
 bool TEventAnalysis::isPatternPresent(THitStorage* hit){
 	return hit->scPixel != -1;
@@ -270,6 +363,41 @@ const vector<double>& TEventAnalysis::getZcoord() const{
 
 const vector<int16_t>& TEventAnalysis::getLevelSc16Multiplicity() const {
 	return vLevelSc16Multiplicity;
+}
+
+const vector<double>& std::TEventAnalysis::getSigma2X() const {
+	return vSigma2X;
+}
+
+const vector<double>& std::TEventAnalysis::getSigma2Y() const {
+	return vSigma2Y;
+}
+
+const TCuts* TEventAnalysis::getCuts(){
+	return cuts;
+}
+
+const vector<THitStorage>* TEventAnalysis::getHit(){
+	return vHit;
+}
+
+int64_t TEventAnalysis::getEventNumber() const {
+	return eventNumber;
+}
+
+const string& TEventAnalysis::getRunNumber() const {
+	return runNumber;
+}
+
+void TEventAnalysis::PrintHits(){
+	for(UInt_t i=0; i<vHit->size(); i++){
+		cout << "   " << vHit->at(i).scModule << "|";
+		cout << vHit->at(i).scPixel << "  \t(";
+		cout << vHit->at(i).x << ", ";
+		cout << vHit->at(i).y << ", ";
+		cout << vHit->at(i).z << ", ";
+		cout << vHit->at(i).t << ")" << endl;
+	}
 }
 
 } /* namespace std */

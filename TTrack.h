@@ -18,6 +18,8 @@ private:
 	double pStart[nPars];
 	double amin;
 	double globcc;
+	float phi;
+	float theta;
 
 	static double Distance2(double x,double y,double z, double *p);
 	static void SumDistance2(int &, double *, double & sum, double * par, int );
@@ -31,6 +33,8 @@ public:
 	double getGlobcc() const;
 	double* getParFit();
 	void setParStart(double parStart[4]);
+	float getPhi() const;
+	float getTheta() const;
 };
 
 #endif /* TTRACK_H_ */

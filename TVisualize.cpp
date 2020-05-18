@@ -8,32 +8,70 @@
 #include "TVisualize.h"
 #include <TPolyLine3D.h>
 #include <TCanvas.h>
+#include <TPad.h>
+#include <TView3D.h>
+#include <TViewer3DPad.h>
+
+#include "common.h"
 
 namespace std {
 
 TVisualize::TVisualize() {
-	// TODO Auto-generated constructor stub
-
+	scMap = nullptr;
 }
 
 TVisualize::~TVisualize() {
 	// TODO Auto-generated destructor stub
 }
 
-void TVisualize::SetViewportSize(double x0, double y0, double z0, double x1, double y1, double z1){
-	float marginSize = 0.1;
-	float xmargin = marginSize*(x1-x0);
-	float ymargin = marginSize*(y1-y0);
-	float zmargin = marginSize*(z1-z0);
+void TVisualize::SetViewport(double x0, double y0, double z0, double x1, double y1, double z1, float fontsize, float xoffset, float yoffset, float zoffset, char option){
+	const float halfSize = 0.55;
+	const float extraz = 0.2;
+	float dx = halfSize*(x1-x0);
+	float dy = halfSize*(y1-y0);
+	float dz = halfSize*(z1-z0);
+	float dxy = max(dx, dy);
+	float x = 0.5*(x0+x1);
+	float y = 0.5*(y0+y1);
+	float z = 0.5*(z0+z1);
+
+	TView3D* view = (TView3D*) TView::CreateView(1);
+	view->SetRange(	x - dxy, y - dxy, z - dz - extraz*dz,
+					x + dxy, y + dxy, z + dz);
+	switch(option){
+	case 'f':
+		view->Front();
+		break;
+	case 's':
+		view->Side();
+		break;
+	case 't':
+		view->Top();
+		break;
+	default:
+		break;
+	}
+
 	TGraph2D *dummy = new TGraph2D(2);
+	dummy->SetTitle("");
 	dummy->GetXaxis()->SetTitle("x [mm]");
 	dummy->GetYaxis()->SetTitle("y [mm]");
 	dummy->GetZaxis()->SetTitle("z [mm]");
+	dummy->GetXaxis()->SetTitleOffset(xoffset);
+	dummy->GetYaxis()->SetTitleOffset(yoffset);
+	dummy->GetZaxis()->SetTitleOffset(zoffset);
+	dummy->GetXaxis()->SetLabelSize(fontsize);
+	dummy->GetXaxis()->SetTitleSize(fontsize);
+	dummy->GetYaxis()->SetLabelSize(fontsize);
+	dummy->GetYaxis()->SetTitleSize(fontsize);
+	dummy->GetZaxis()->SetLabelSize(fontsize);
+	dummy->GetZaxis()->SetTitleSize(fontsize);
+
 	stringstream ss;
 	ss << "dummy" << "";
 	dummy->SetName(ss.str().c_str());
-	dummy->SetPoint(0, x0 - xmargin, y0 - ymargin, z0 - zmargin);
-	dummy->SetPoint(1, x1 + xmargin, y1 + ymargin, z1 + zmargin);
+	dummy->SetPoint(0, x - dxy, y - dxy, z - dz - extraz*dz);
+	dummy->SetPoint(1, x + dxy, y + dxy, z + dz);
 	dummy->SetLineWidth(0);
 	dummy->SetMarkerSize(0);
 	dummy->Draw("p");
@@ -129,18 +167,10 @@ void TVisualize::DrawNeutronTubes(uint16_t linewidth, Color_t linecol){
 
 }
 
-void TVisualize::DrawScSetup(TScMapReader* scMap){
-	float wx = 0.5 * (scMap->GetMaxXCoord() - scMap->GetMinXCoord() + scdxy);
-	float wy = 0.5 * (scMap->GetMaxYCoord() - scMap->GetMinYCoord() + scdxy);
-	float cx = scMap->GetMinXCoord() + wx;
-	float cy = scMap->GetMinYCoord() + wy;
-	float w = max(wx, wy);
-	SetViewportSize(cx - wx, cy - wy, scMap->GetMinZCoord(),
-					cx + wx, cy + wy, scMap->GetMaxZCoord() + dz);
-
+void TVisualize::DrawScSetup(uint16_t linewidth, Color_t linecol){
 	for(UInt_t isc=0; isc<scMap->GetScMap()->size(); isc++){
 		TSingleScMap* s = &(scMap->GetScMap()->at(isc));
-		DrawScModule(s->xCoord, s->yCoord, s->zCoord + DS_SC16Z_CASE);
+		DrawScModule(s->xCoord, s->yCoord, s->zCoord + DS_SC16Z_CASE, linewidth, linecol);
 	}
 }
 
@@ -176,11 +206,7 @@ void TVisualize::DrawFired(TGraph2D *gr, Color_t col){
 	}
 }
 
-void TVisualize::DrawFit(double* parFit){
-	cout << parFit[0] << " ";
-	cout << parFit[1] << " ";
-	cout << parFit[2] << " ";
-	cout << parFit[3] << endl;
+void TVisualize::DrawFit(double* parFit, uint16_t linewidth, Color_t linecol){
 	// draw the fitted line
 	TPolyLine3D *l = new TPolyLine3D(2);
 	double t0 = -100;
@@ -191,8 +217,8 @@ void TVisualize::DrawFit(double* parFit){
 		Line(t,parFit,x,y,z);
 		l->SetPoint(i,x,y,z);
 	}
-	l->SetLineColor(kRed);
-	l->SetLineWidth(2.5);
+	l->SetLineColor(linecol);
+	l->SetLineWidth(linewidth);
 	l->Draw("same");
 }
 
@@ -205,7 +231,7 @@ void TVisualize::SaveForVis(TEventAnalysis* ea, uint16_t maxNVis){
 		ea->FillHitPosGraph(vgr);
 
 		int izLast = ea->getZcoord().size()-1;
-		if(izLast < 2){
+		if(izLast < 1){
 			cout << " <W> TVisualize::SaveForVis(): Event multiplicity is too low: " << ea->getZcoord().size() << endl;
 			return;
 		}
@@ -220,24 +246,88 @@ void TVisualize::SaveForVis(TEventAnalysis* ea, uint16_t maxNVis){
 	}
 }
 
-void TVisualize::Visualize(TScMapReader* scMap){
+void TVisualize::VisualizeMulti(TScMapReader* scMap){
+	this->scMap = scMap;
 	if(vvGrVis.size() > 0){
 		TCanvas *cvsVis3d = new TCanvas("cvsVis3d", "vis3d", 1700, 850);
 		cvsVis3d->Divide(4,3);
 		for(UInt_t igr=0; igr<12; igr++){
 			cvsVis3d->cd(igr+1);
-			DrawScSetup(scMap);
+			DrawScSetup();
 			DrawPb(2.5, kBlack);
 			DrawNeutronTubes(2, kRed+3);
 			if(vvGrVis.size() > igr){
 				DrawFired(vvGrVis.at(igr).at(0), kBlue-2);
 				DrawFired(vvGrVis.at(igr).at(1), kRed);
-				DrawFit(vTrack.at(igr).getParFit());
+				DrawFit(vTrack.at(igr).getParFit(), 2.5, kRed);
 			}
 		}
 	}
 	else{
-		cout << "<E> TVisualize::Visualize(): No graphs to visualize. Exiting." << endl;
+		cout << "<E> TVisualize::VisualizeMulti(): No graphs to visualize. Exiting." << endl;
+	}
+}
+
+void TVisualize::CreateViewAndDrawAll(TEventAnalysis* ea, int evn, float fontsize, float xoffset, float yoffset, float zoffset, char option){
+	float wx = 0.5 * (scMap->GetMaxXCoord() - scMap->GetMinXCoord() + scdxy);
+	float wy = 0.5 * (scMap->GetMaxYCoord() - scMap->GetMinYCoord() + scdxy);
+	float cx = scMap->GetMinXCoord() + wx;
+	float cy = scMap->GetMinYCoord() + wy;
+	SetViewport(cx - wx, cy - wy, scMap->GetMinZCoord(),
+				cx + wx, cy + wy, scMap->GetMaxZCoord() + dz, fontsize, xoffset, yoffset, zoffset, option);
+	DrawScSetup(1, kGray);
+	DrawPb(2.5, kBlack);
+	DrawNeutronTubes(2, kRed+3);
+	if(vvGrVis.at(0).size() >= 1){
+		DrawFired(vvGrVis.at(evn).at(0), kBlue-2);
+		DrawFired(vvGrVis.at(evn).at(1), kRed);
+		DrawFit(vTrack.at(evn).getParFit(), 2.5, kRed);
+	}
+}
+
+void TVisualize::VisualizeSingleEvent(TEventAnalysis* ea, TScMapReader* scMap){
+	const int evn = 0;
+	this->scMap = scMap;
+	float fontsize = 0.07, lmargin = 0.15, rmargin = 0.03, tmargin = 0.03, bmargin = 0.2;
+	SaveForVis(ea, 1);
+	const float vsplit = 0.7;
+	if(vvGrVis.size() == 1){
+		stringstream ssCvsName;
+		ssCvsName << "cVis-" << ea->getRunNumber() << "-" << ea->getEventNumber();
+		TCanvas *cvsVisSingle = new TCanvas("cVisSingle", ssCvsName.str().c_str(), 1700, 850);
+		TPad *pmain = new TPad("pmain", "pmain", 0, 0, vsplit, 1);
+		TPad *pright = new TPad("pmain", "pmain", vsplit, 0, 1, 1);
+
+		cvsVisSingle->cd();
+		pmain->Draw();
+		pmain->cd();
+			gPad->SetMargin(0.1, 0.1, 0.13, 0.1);
+			CreateViewAndDrawAll(ea, evn, 0.5*fontsize, 1.8, 1.8, 1.4);
+			stringstream ss;
+			if(vTrack.size()>0){
+				ss << ea->getRunNumber() << ",  event = " << ea->getEventNumber() << ",  ";
+				ss << "#phi = " << round(vTrack.at(0).getPhi()) << "#circ,  ";
+				ss << "#theta = " << round(vTrack.at(0).getTheta()) << "#circ";
+			}
+			common::DrawTextNdc(ss.str().c_str(), 0.02, 0.98-0.65*fontsize, 0.65*fontsize, kBlue-2);
+		cvsVisSingle->cd();
+		pright->Draw();
+		pright->Divide(1,3);
+		pright->cd(1);
+			gPad->SetMargin(lmargin, rmargin, bmargin, tmargin);
+			CreateViewAndDrawAll(ea, evn, fontsize, 1.2, 1.2, 1.2, 't');
+			common::DrawTextNdc("Top", 0.83, 0.85, fontsize*1.5);
+		pright->cd(2);
+			gPad->SetMargin(lmargin, rmargin, bmargin, tmargin);
+			CreateViewAndDrawAll(ea, evn, fontsize, 0.6, 1.2, 1.2, 'f');
+			common::DrawTextNdc("Front", 0.83, 0.85, fontsize*1.5);
+		pright->cd(3);
+			gPad->SetMargin(lmargin, rmargin, bmargin, tmargin);
+			CreateViewAndDrawAll(ea, evn, fontsize, 1.2, 0.6, 1.2, 's');
+			common::DrawTextNdc("Side", 0.83, 0.85, fontsize*1.5);
+	}
+	else{
+		cout << "<E> TVisualize::VisualizeSingleEvent(): No graphs to visualize. Exiting." << endl;
 	}
 }
 

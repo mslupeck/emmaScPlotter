@@ -53,9 +53,23 @@ void RunRawMulti(EmmaEventTreeReader &eetr){
 
 void RunReconstruct(EmmaEventTreeReader &eetr){
 	TApplication theApp("App",0,nullptr);{
-		if(eetr.ReadTreeFromRootFile(12) < 0) return;
+		if(eetr.ReadTreeFromRootFile() < 0) return;
 		TReconstruct r(&eetr, 10);
 		r.RunReconstruct();
+	}
+	theApp.SetIdleTimer(10000,"exit()"); // exits the program after 10000 s of inactivity
+	theApp.SetReturnFromRun(true);       //
+	cout << "Running done." << endl;
+	theApp.Run();
+}
+
+void RunVisualize(EmmaEventTreeReader &eetr){
+	TApplication theApp("App",0,nullptr);{
+		if(eetr.ReadTreeFromRootFile() < 0) return;
+		TVisualize vis;
+		TEventAnalysis ea(&(eetr.GetFileStorage()->at(0)->vHitPoint), eetr.GetCuts()->n0, eetr.getFileBaseName(), eetr.GetCuts(), eetr.getZcoord());
+		ea.AnalyseLevelMultiplicity();
+		vis.VisualizeSingleEvent(&ea, eetr.getScMap());
 	}
 	theApp.SetIdleTimer(10000,"exit()"); // exits the program after 10000 s of inactivity
 	theApp.SetReturnFromRun(true);       //
@@ -70,8 +84,11 @@ int main(int argc, char* argv[]){
 	cli.GetModeList()->AddPar("basic", "Reads original root file and plots basic test histos");
 	cli.GetModeList()->AddPar("rawMulti", "Reads original root file and plots raw multiplicity histos");
 	cli.GetModeList()->AddPar("reco", "Do event reconstruction");
+	cli.GetModeList()->AddPar("vis", "Do event visualization");
 	cli.AddPar("i", "Input path", true);
 	cli.AddPar("o", "Output name", true);
+	cli.AddPar("n0", "Start from this event number", false);
+	cli.AddPar("nMax", "Max number of events to be processed", false);
 	cli.AddPar("promptT0", "Prompt peak cut - start time [default = -2e9]", false);
 	cli.AddPar("promptT1", "Prompt peak cut - end time [default = 2e9]", false);
 	cli.AddPar("ignoreHitsWithoutTiming", "true / false [default: false]", false);
@@ -98,16 +115,21 @@ int main(int argc, char* argv[]){
 	if(cli.IsParDefined("ignoreHitsWithoutPattern")) ignoreHitsWithoutPattern = cli.GetParBool("ignoreHitsWithoutPattern");
 	eetr.setIgnoreHitsWithoutTiming(ignoreHitsWithoutTiming);
 	eetr.setIgnoreHitsWithoutPattern(ignoreHitsWithoutPattern);
-	if(ignoreHitsWithoutTiming == true) cout << "timing - true" << endl;
 	int t0 = -2e9, t1 = 2e9;
 	if(cli.IsParDefined("promptT0")) t0 = cli.GetParInt("promptT0");
 	if(cli.IsParDefined("promptT1")) t1 = cli.GetParInt("promptT1");
 	eetr.setAcceptHitsFromPromptPeakOnly(true, t0, t1);
+	int nMax = -1, n0 = -1;
+	if(cli.IsParDefined("nMax")) nMax = cli.GetParInt("nMax");
+	if(cli.IsParDefined("n0")) n0 = cli.GetParInt("n0");
+	eetr.setEventNumberCuts(n0, nMax);
 	cout << "  <I> The following settings are used: " << endl;
 	cout << "  <I>   promptT0 = " << t0 << endl;
 	cout << "  <I>   promptT1 = " << t1 << endl;
 	cout << "  <I>   ignoreHitsWithoutTiming = " << std::boolalpha << ignoreHitsWithoutTiming << endl;
 	cout << "  <I>   ignoreHitsWithoutPattern = " << std::boolalpha << ignoreHitsWithoutPattern << endl;
+	cout << "  <I>   n0 = " << n0 << endl;
+	cout << "  <I>   nMax = " << nMax << endl;
 
 	if(cli.GetParString("m").compare("basic")==0){
 		RunBasic(eetr);
@@ -117,6 +139,9 @@ int main(int argc, char* argv[]){
 	}
 	else if(cli.GetParString("m").compare("reco")==0){
 		RunReconstruct(eetr);
+	}
+	else if(cli.GetParString("m").compare("vis")==0){
+		RunVisualize(eetr);
 	}
 	else{
 		cout << "Unknown mode: " << cli.GetParString("m") << endl;
