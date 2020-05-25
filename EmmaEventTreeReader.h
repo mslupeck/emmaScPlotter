@@ -69,7 +69,7 @@ public:
 	void setIgnoreHitsWithoutPattern(bool ignoreHitsWithoutPattern);
 	void setIgnoreHitsWithoutTiming(bool ignoreHitsWithoutTiming);
 	void setAcceptHitsFromPromptPeakOnly(bool acceptHitsFromPromptPeakOnly, int t0, int t1);
-	void setEventNumberCuts(int n0, int nMax);
+	void setEventNumberCuts(int n0, double t0, int nMax);
 
 	void SetInputFileInfo(const string &filePath, const string &treeName, const string &objectName);
 	vector<TFileStorage*>* GetFileStorage();

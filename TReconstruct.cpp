@@ -27,7 +27,7 @@ void TReconstruct::RunReconstruct(){
 	int nEntries = vfs->size();
 	for(int evn=0; evn<nEntries; evn++){
 //		cout << endl << "=== " << evn << " =============================================" << endl;
-		TEventAnalysis eaOrg(&(vfs->at(evn)->vHitPoint), evn, eetr->getFileBaseName(), eetr->GetCuts(), eetr->getZcoord());
+		TEventAnalysis eaOrg(vfs->at(evn), eetr->GetCuts(), eetr->getZcoord());
 		eaOrg.AnalyseLevelMultiplicity();
 		if(verbose >= 2){
 			if((evn%100000) == 0){

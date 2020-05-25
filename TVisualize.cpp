@@ -293,7 +293,7 @@ void TVisualize::VisualizeSingleEvent(TEventAnalysis* ea, TScMapReader* scMap){
 	const float vsplit = 0.7;
 	if(vvGrVis.size() == 1){
 		stringstream ssCvsName;
-		ssCvsName << "cVis-" << ea->getRunNumber() << "-" << ea->getEventNumber();
+		ssCvsName << "cVis-R" << ea->getRunNumber() << "-" << ea->getEventNumberWithinRun();
 		TCanvas *cvsVisSingle = new TCanvas("cVisSingle", ssCvsName.str().c_str(), 1700, 850);
 		TPad *pmain = new TPad("pmain", "pmain", 0, 0, vsplit, 1);
 		TPad *pright = new TPad("pmain", "pmain", vsplit, 0, 1, 1);
@@ -303,13 +303,15 @@ void TVisualize::VisualizeSingleEvent(TEventAnalysis* ea, TScMapReader* scMap){
 		pmain->cd();
 			gPad->SetMargin(0.1, 0.1, 0.13, 0.1);
 			CreateViewAndDrawAll(ea, evn, 0.5*fontsize, 1.8, 1.8, 1.4);
-			stringstream ss;
+			stringstream ss1, ss2;
 			if(vTrack.size()>0){
-				ss << ea->getRunNumber() << ",  event = " << ea->getEventNumber() << ",  ";
-				ss << "#phi = " << round(vTrack.at(0).getPhi()) << "#circ,  ";
-				ss << "#theta = " << round(vTrack.at(0).getTheta()) << "#circ";
+				ss1 << "R" << ea->getRunNumber() << ",    event=" << ea->getEventNumberWithinRun() << ",    ";
+				ss1 << "t=" << fixed << ea->getEvent()->fEventTimeS + ea->getEvent()->lFileStartTimeS + 1e-9*ea->getEvent()->lFileStartTimeNs;
+				ss2 << "#phi = " << round(vTrack.at(0).getPhi()) << "#circ,  ";
+				ss2 << "#theta = " << round(vTrack.at(0).getTheta()) << "#circ";
 			}
-			common::DrawTextNdc(ss.str().c_str(), 0.02, 0.98-0.65*fontsize, 0.65*fontsize, kBlue-2);
+			common::DrawTextNdc(ss1.str().c_str(), 0.02, 0.98-0.65*fontsize*1, 0.65*fontsize, kBlue-2);
+			common::DrawTextNdc(ss2.str().c_str(), 0.02, 0.98-0.65*fontsize*2, 0.65*fontsize, kBlue-2);
 		cvsVisSingle->cd();
 		pright->Draw();
 		pright->Divide(1,3);

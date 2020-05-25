@@ -16,8 +16,9 @@ public:
 	int promptT0; // start time of the prompt-peak gate in TDC channels (100-ps)
 	int promptT1; // stop time of the prompt-peak gate in TDC channels (100-ps)
 
-	int n0; // event number to start with
-	int nMax; // max number of files to be processed
+	int n0;    // event number to start with
+	double t0; // event time to start with
+	int nMax;  // max number of files to be processed
 
 	TCuts();
 	TCuts(const TCuts *c);

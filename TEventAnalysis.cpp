@@ -10,25 +10,18 @@
 
 namespace std {
 
-TEventAnalysis::TEventAnalysis(vector<THitStorage> *vHit, int64_t eventNumber, string& runNumber, TCuts *cuts, vector<double> *vZcoord) {
-	deletePointers = false;
-	this->vZcoord = vZcoord;
-	this->vHit = vHit;
-	nLevelsPresent = 0;
+TEventAnalysis::TEventAnalysis(TFileStorage *event, TCuts *cuts, vector<double> *vZcoord) {
+	this->event = event;
 	this->cuts = cuts;
-	this->eventNumber = eventNumber;
-	this->runNumber = runNumber;
+	this->vZcoord = vZcoord;
+	nLevelsPresent = 0;
+	deletePointers = false;
+	vHit = &(event->vHitPoint);
 }
 
 TEventAnalysis::TEventAnalysis(TEventAnalysis &ea){
+	event = new TFileStorage(*ea.event);
 	nLevelsPresent = ea.getLevelsPresent();
-	deletePointers = true;
-	vHit = new vector<THitStorage>;
-	eventNumber = ea.eventNumber;
-	runNumber = ea.runNumber;
-	for(UInt_t i=0; i<ea.getHit()->size(); i++){
-		vHit->push_back(ea.getHit()->at(i));
-	}
 	cuts = new TCuts(ea.getCuts());
 	vZcoord = new vector<double>;
 	for(UInt_t i=0; i<ea.getZcoord().size(); i++){
@@ -52,11 +45,13 @@ TEventAnalysis::TEventAnalysis(TEventAnalysis &ea){
 	for(UInt_t i=0; i<ea.getSigma2Y().size(); i++){
 		vSigma2Y.push_back(ea.getSigma2Y().at(i));
 	}
+	deletePointers = true;
+	vHit = &(event->vHitPoint);
 }
 
 TEventAnalysis::~TEventAnalysis() {
 	if(deletePointers){
-		delete vHit;
+		delete event;
 		delete cuts;
 		delete vZcoord;
 	}
@@ -381,12 +376,16 @@ const vector<THitStorage>* TEventAnalysis::getHit(){
 	return vHit;
 }
 
-int64_t TEventAnalysis::getEventNumber() const {
-	return eventNumber;
+const TFileStorage* TEventAnalysis::getEvent(){
+	return event;
 }
 
-const string& TEventAnalysis::getRunNumber() const {
-	return runNumber;
+int64_t TEventAnalysis::getEventNumberWithinRun() const {
+	return event->iEventNumberWithinRun;
+}
+
+const int TEventAnalysis::getRunNumber() const {
+	return event->iRunNumber;
 }
 
 void TEventAnalysis::PrintHits(){

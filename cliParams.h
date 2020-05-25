@@ -39,6 +39,7 @@ public:
 	int 		GetParInt		(const std::string& parName) const;
 	bool 		GetParBool		(const std::string& parName) const;
 	float 		GetParFloat		(const std::string& parName) const;
+	double 		GetParDouble	(const std::string& parName) const;
 	bool		IsParDefined	(const std::string& parName) const;
 };
 

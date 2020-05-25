@@ -14,6 +14,7 @@ TCuts::TCuts() {
 	promptT0 = -1e9;
 	promptT1 = 1e9;
 	n0 = -1;
+	t0 = -1;
 	nMax = -1;
 }
 
@@ -24,6 +25,7 @@ TCuts::TCuts(const TCuts *c) {
 	promptT0 = c->promptT0;
 	promptT1 = c->promptT1;
 	n0 = c->n0;
+	t0 = c->t0;
 	nMax = c->nMax;
 }
 

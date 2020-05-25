@@ -134,7 +134,7 @@ void EmmaEventTreeReader::AnalysePatternTimingCorrelation(){
 	// Main event loop
 	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
-		TEventAnalysis ea(&(vfs.at(evn)->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
+		TEventAnalysis ea(vfs.at(evn), &cuts, &vZcoord);
 		ea.FillHbTbHistos(vTimeCnt, vHbCnt, vTimeAndHbCnt, vTimeOrHbCnt);
 	}
 
@@ -229,7 +229,7 @@ void EmmaEventTreeReader::AnalyseEventTimeDiffSpectrum(){
 	Int_t prevFileNumber = 0;
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
+		TEventAnalysis ea(fs, &cuts, &vZcoord);
 		if(evn>0){
 			if(prevFileNumber == fs->iFileNumber){ // don't check upon the change of run because the event time diff will be negative
 				if(fs->fEventTimeS-prevEventTime < 0){
@@ -311,7 +311,7 @@ void EmmaEventTreeReader::AnalyseRawScTimeSpectrum(){
 	Int_t nTotalHits = 0;
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
+		TEventAnalysis ea(fs, &cuts, &vZcoord);
 		ea.AnalyseLevelMultiplicity();
 		ea.FillRawScTimeHistos(hScTime);
 		nTotalHits += fs->vHitPoint.size(); // total #hits without any cuts
@@ -390,7 +390,7 @@ void EmmaEventTreeReader::AnalyseMultiplicityPerLevel(){
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
 		hh->Fill(fs->iFileNumber);
-		TEventAnalysis ea(&(fs->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
+		TEventAnalysis ea(fs, &cuts, &vZcoord);
 		ea.AnalyseLevelMultiplicity();
 		if(ea.getLevelsPresent() >= 3){
 			ea.FillLayerHistos(vvh2.at(0));
@@ -482,7 +482,7 @@ void EmmaEventTreeReader::AnalyseMultiplicityCorrelationBetweenLevels(){
 	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
+		TEventAnalysis ea(fs, &cuts, &vZcoord);
 /*		ea.AnalyseLevelSc16Multiplicity(&vZcoord);
  		for(UInt_t itype=0; itype<vh2.size(); itype++){
 			vh2.at(itype)->Fill(ea.getLevelSc16Multiplicity().at(0), ea.getLevelSc16Multiplicity().at(itype+1));
@@ -614,7 +614,7 @@ void EmmaEventTreeReader::AnalyseTimingBetweenLevels(){
 	int nEntries = vfs.size();
 	for(int evn=0; evn<nEntries; evn++){
 		TFileStorage *fs = vfs.at(evn);
-		TEventAnalysis ea(&(fs->vHitPoint), evn, fileBaseName, &cuts, &vZcoord);
+		TEventAnalysis ea(fs, &cuts, &vZcoord);
 		ea.AnalyseLevelMultiplicity();
 		for(uint16_t iz=0; iz<vZcoord.size(); iz++){
 			vAvgTimePerLayer.at(iz) = ea.FillAvgHitTime(vhTimingPerLayer.at(iz), vZcoord.at(iz));
@@ -674,8 +674,9 @@ void EmmaEventTreeReader::setAcceptHitsFromPromptPeakOnly(bool acceptHitsFromPro
 	cuts.promptT1 = t1;
 }
 
-void EmmaEventTreeReader::setEventNumberCuts(int n0, int nMax){
+void EmmaEventTreeReader::setEventNumberCuts(int n0, double t0, int nMax){
 	cuts.n0 = n0;
+	cuts.t0 = t0;
 	cuts.nMax = nMax;
 }
 
@@ -749,14 +750,16 @@ void EmmaEventTreeReader::ListPlaneCoords(vector<double>& vout, Int_t evnLimit){
 	sort(v.begin(), v.end());
 
 	//remove closeby coordinates, because they belong to the same plane
-	const float samePlaneEpsilon = 1;
-	int16_t prevv=v.at(0);
-	vout.push_back(prevv);
-	for(uint16_t i=1; i<v.size(); i++){
-		if(fabs(v.at(i)-prevv) > samePlaneEpsilon){
-			vout.push_back(v.at(i));
+	if(v.size() > 1){
+		const float samePlaneEpsilon = 1;
+		int16_t prevv=v.at(0);
+		vout.push_back(prevv);
+		for(uint16_t i=1; i<v.size(); i++){
+			if(fabs(v.at(i)-prevv) > samePlaneEpsilon){
+				vout.push_back(v.at(i));
+			}
+			prevv = v.at(i);
 		}
-		prevv = v.at(i);
 	}
 }
 

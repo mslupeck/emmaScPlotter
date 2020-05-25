@@ -31,10 +31,9 @@ private:
 	static constexpr float  EPSILON = 0.01;
 
 	bool deletePointers;       // if the event is copied, it should delete all the pointers
-	vector<THitStorage> *vHit; // pointer to the vector of TTree entries
+	TFileStorage *event;       // pointer to the single event
+	vector<THitStorage> *vHit; // shortcut, contained in TFileStorage *event
 	TCuts *cuts;               // class storing cut settings
-	int64_t eventNumber;
-	string runNumber;
 
 	// z-coordinates of the system (if 4 detector layers are present in the file
 	// then this vector has 4 entries listing the z-position of each layer)
@@ -57,7 +56,7 @@ private:
 	bool isWithinCuts(THitStorage* hit);
 
 public:
-	TEventAnalysis(vector<THitStorage> *vHit, int64_t eventNumber, string& runNumber, TCuts *cuts, vector<double> *vZcoord = nullptr);
+	TEventAnalysis(TFileStorage *event, TCuts *cuts, vector<double> *vZcoord = nullptr);
 	TEventAnalysis(TEventAnalysis &ea);
 	virtual ~TEventAnalysis();
 
@@ -84,9 +83,10 @@ public:
 	const vector<double>& getSigma2X() const;
 	const vector<double>& getSigma2Y() const;
 	const vector<THitStorage>* getHit();
+	const TFileStorage* getEvent();
 	const TCuts* getCuts();
-	int64_t getEventNumber() const;
-	const string& getRunNumber() const;
+	int64_t getEventNumberWithinRun() const;
+	const int getRunNumber() const;
 
 	void PrintHits();
 };

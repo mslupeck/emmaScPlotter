@@ -101,6 +101,18 @@ float cliParams::GetParFloat(const std::string& parName) const {
 	return result;
 }
 
+double cliParams::GetParDouble(const std::string& parName) const {
+	double result;
+	std::stringstream ss;
+	ss << GetParString(parName);
+	ss >> result;
+	if(ss.fail()){
+		std::cout << "<E> cliParams::GetParameterFloat(): Conversion of parameter " << parName << " (" << ss.str() << ") to float failed." << std::endl;
+		return -999999;
+	}
+	return result;
+}
+
 bool cliParams::IsParDefined(const std::string& parName) const {
 	for(uint16_t i=0; i<vName.size(); i++){
 		if(parName.compare(vName.at(i)) == 0){
