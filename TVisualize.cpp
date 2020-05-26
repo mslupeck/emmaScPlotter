@@ -192,7 +192,7 @@ void TVisualize::Line(double t, double *p, double &x, double &y, double &z) {
 	z = t;
 }
 
-void TVisualize::DrawFired(TGraph2D *gr, Color_t col){
+void TVisualize::DrawFiredWireframe(TGraph2D *gr, Color_t col){
 	if((gr != nullptr) && (gr->GetN() > 0)){
 		for(uint16_t ipoint=0; ipoint<gr->GetN(); ipoint++){
 			double x,y,z;
@@ -208,6 +208,11 @@ void TVisualize::DrawFired(TGraph2D *gr, Color_t col){
 				DrawScPixel(x, y, z, 1.5, col);
 			}
 		}
+	}
+}
+
+void TVisualize::DrawFiredPoint(TGraph2D *gr, Color_t col){
+	if((gr != nullptr) && (gr->GetN() > 0)){
 		gr->SetMarkerColor(col);
 		gr->SetFillColor(col);
 		gr->SetMarkerStyle(8);
@@ -237,18 +242,22 @@ void TVisualize::SaveForVis(TEventAnalysis &eaIn, uint16_t maxNVis){
 		TVisStorage* vs = new TVisStorage(eaIn);
 		vs->vGrVis.push_back(new TGraph2D()); // first graph for good (after cuts) hits
 		vs->vGrVis.push_back(new TGraph2D()); // second graph for rejected hits
-		vs->ea->FillHitPosGraph(vs->vGrVis);
+		vs->vGrVis.push_back(new TGraph2D()); // third graph for randomized hits
+		eaIn.FillHitPosGraph(vs->vGrVis);
 
-		int izLast = vs->ea->getZcoord().size()-1;
+		int izLast = eaIn.getZcoord().size()-1;
 		if(izLast < 1){
 			cout << " <W> TVisualize::SaveForVis(): Event multiplicity is too low: " << vs->ea->getZcoord().size() << endl;
 			return;
 		}
 
-		TTrack track;
-		track.CalculateFitInitialParams(vs->ea->getAvgX(), vs->ea->getAvgY(), vs->ea->getZcoord());
-		track.Line3Dfit(vs->vGrVis.at(0));
-		vs->vTrack.push_back(track);
+		TTrack trackOrg, trackRnd;
+		trackOrg.CalculateFitInitialParams(eaIn.getAvgX(), eaIn.getAvgY(), eaIn.getZcoord());
+		trackOrg.Line3Dfit(vs->vGrVis.at(0));
+		vs->vTrack.push_back(trackOrg);
+		trackRnd.CalculateFitInitialParams(eaIn.getAvgX(), eaIn.getAvgY(), eaIn.getZcoord());
+		trackRnd.Line3Dfit(vs->vGrVis.at(2));
+		vs->vTrack.push_back(trackRnd);
 		vVisStorage.push_back(vs);
 
 		evVis++;
@@ -293,9 +302,11 @@ void TVisualize::CreateViewAndDrawAll(UInt_t evn, float fontsize, float xoffset,
 	DrawNeutronTubes(2, kRed+3);
 	if(isEvnStoredForVis(evn)){
 		TVisStorage* vs = vVisStorage.at(evn);
-		DrawFired(vs->vGrVis.at(0), kBlue-2);
-		DrawFired(vs->vGrVis.at(1), kRed);
-		DrawFit(vs->vTrack.at(0).getParFit(), 2.5, kRed);
+		if(vs->vGrVis.size() > 0) DrawFiredWireframe(vs->vGrVis.at(0), kBlue-2);
+		if(vs->vGrVis.size() > 1) DrawFiredWireframe(vs->vGrVis.at(1), kRed);
+		if(vs->vGrVis.size() > 2) DrawFiredPoint(vs->vGrVis.at(2), kMagenta);
+		if(vs->vTrack.size() > 0) DrawFit(vs->vTrack.at(0).getParFit(), 1.5, kRed);
+		if(vs->vTrack.size() > 1) DrawFit(vs->vTrack.at(1).getParFit(), 2.5, kMagenta-2);
 	}
 }
 

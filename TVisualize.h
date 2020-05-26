@@ -43,7 +43,8 @@ private:
 	void DrawNeutronTubes(uint16_t linewidth, Color_t linecol);
 	void CreateViewAndDrawAll(UInt_t evn, float fontsize, float xoffset, float yoffset, float zoffset, char option='\0');
 	void Line(double t, double *p, double &x, double &y, double &z);
-	void DrawFired(TGraph2D *gr, Color_t col);
+	void DrawFiredWireframe(TGraph2D *gr, Color_t col);
+	void DrawFiredPoint(TGraph2D *gr, Color_t col);
 	void DrawFit(double* parFit, uint16_t linewidth = 1, Color_t linecol = kGray);
 
 	// Pixel sizes

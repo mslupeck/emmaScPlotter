@@ -30,10 +30,11 @@ private:
 	static constexpr float  DXY_PIXEL = 0.5 * (PIXEL_SIZE + PIXEL_GAP);
 	static constexpr float  EPSILON = 0.01;
 
-	bool deletePointers;       // if the event is copied, it should delete all the pointers
-	TFileStorage *event;       // pointer to the single event
-	vector<THitStorage> *vHit; // shortcut, contained in TFileStorage *event
-	TCuts *cuts;               // class storing cut settings
+	bool deletePointers;         // if the event is copied, it should delete all the pointers
+	TFileStorage *event;         // pointer to the single event
+	vector<THitStorage> *vHit;   // shortcut, contained in TFileStorage *event
+	vector<THitStorage> vHitRnd; // contains randomized x,y positions computed from vHit
+	TCuts *cuts;                 // class storing cut settings
 
 	// z-coordinates of the system (if 4 detector layers are present in the file
 	// then this vector has 4 entries listing the z-position of each layer)
@@ -54,6 +55,7 @@ private:
 	bool isTimePresent(THitStorage* hit);
 	bool isTimeWithinPromptPeak(THitStorage* hit);
 	bool isWithinCuts(THitStorage* hit);
+	void FillHitPosGraphWith(vector<TGraph2D*> &vgr, UInt_t index0, UInt_t index1, vector<THitStorage>* vHitIn);
 
 public:
 	TEventAnalysis(TFileStorage *event, TCuts *cuts, vector<double> *vZcoord = nullptr);
@@ -73,6 +75,7 @@ public:
 
 	// Tracking / visualization
 	void FillHitPosGraph(vector<TGraph2D*> &vgr);
+	void RandomizeHitPos();
 
 	// Filtering
 	void DeleteHitsWithBadTiming(double tthr=250); 	// 250 channels == 22 ns for non-calibrated detectors + 3 ns for TOF

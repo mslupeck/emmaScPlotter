@@ -44,12 +44,15 @@ void TReconstruct::RunReconstruct(){
 		TEventAnalysis eaProcessed(eaOrg);
 		eaProcessed.DeleteHitsWithBadTiming();
 		eaProcessed.AnalyseLevelMultiplicity(); // again because now some hits have been removed
-		eaProcessed.FillHitPosLevel(vh2control, vh2, 1, 3, 1, 160);
+		eaProcessed.RandomizeHitPos();
 
-//		visualizer.SaveForVis(eaProcessed);
+		// Clusterizing tests
+		//eaProcessed.FillHitPosLevel(vh2control, vh2, 1, 3, 1, 160);
+
+		visualizer.SaveForVis(eaProcessed);
 
 
-		/*
+		/* // Old MM code
 		eOrg->CalculateClosestNeighbors(126); // closest: sqrt(2)*halfPixelSize = 89  ||  also diagonals: 2*halfPixelSize = 126
 
 		TGraph2D *gr = new TGraph2D();
@@ -83,6 +86,7 @@ void TReconstruct::RunReconstruct(){
 		*/
 	}
 
+/*	// Clusterizing tests
 	TCanvas *cvsSpread = new TCanvas("cvsSpread","cvsSpread",1800,600);
 	cvsSpread->Divide(3,1);
 	cvsSpread->cd(1);
@@ -105,8 +109,8 @@ void TReconstruct::RunReconstruct(){
 			common::DrawTextNdc(vh2.at(i)->GetName(), 0.0, 0.8, 0.2);
 		}
 	}
-
-//	visualizer.VisualizeMulti(eetr->getScMap());
+*/
+	visualizer.VisualizeMulti(eetr->getScMap());
 }
 
 

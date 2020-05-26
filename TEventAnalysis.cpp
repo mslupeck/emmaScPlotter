@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include "TEventAnalysis.h"
+#include "TRandom3.h"
 #include "common.h"
 
 namespace std {
@@ -266,38 +267,24 @@ void TEventAnalysis::FillHitPosLevel(vector<TH2D*> &vh2control, vector<TH2D*> &v
 	}
 }
 
+void TEventAnalysis::RandomizeHitPos(){
+	TRandom3 r;
+	for(uint16_t ihit=0; ihit<vHit->size(); ihit++){
+		THitStorage *hit = &(vHit->at(ihit));
+		if(isWithinCuts(hit)){
+			THitStorage hitRnd;
+			Int_t xRnd = round(r.Uniform(-0.5*PIXEL_SIZE, 0.5*PIXEL_SIZE) + hit->x);
+			Int_t yRnd = round(r.Uniform(-0.5*PIXEL_SIZE, 0.5*PIXEL_SIZE) + hit->y);
+			hitRnd.Fill(hit->scModule, hit->scPixel, xRnd, yRnd, hit->z, hit->t);
+			vHitRnd.push_back(hitRnd);
+		}
+	}
+}
+
 void TEventAnalysis::FillHitPosGraph(vector<TGraph2D*> &vgr){
-	vector<int> vn(vgr.size(), 0);
-	// Check how many points to allocate in each graph
-	for(uint16_t ihit=0; ihit<vHit->size(); ihit++){
-		THitStorage *hit = &(vHit->at(ihit));
-		if(isWithinCuts(hit)){
-			vn.at(0)++;
-		}
-		else{
-			if(vgr.size() > 1){ // Fill to the second graph the hits, that did not pass the cuts
-				vn.at(1)++;
-			}
-		}
-	}
-
-	// Allocate the number of points to graphs
-	for(UInt_t igr=0; igr<vgr.size(); igr++){
-		vgr.at(igr)->Set(vn.at(igr));
-	}
-
-	std::fill(vn.begin(), vn.end(), 0);
-	// Fill the graphs (could be optimized - in the first step save indices of hits for each group; then save the correct hits directly to graphs here)
-	for(uint16_t ihit=0; ihit<vHit->size(); ihit++){
-		THitStorage *hit = &(vHit->at(ihit));
-		if(isWithinCuts(hit)){
-			vgr.at(0)->SetPoint(vn.at(0)++, hit->x, hit->y, hit->z);
-		}
-		else{
-			if(vgr.size() > 1){ // Fill to the second graph the hits, that did not pass the cuts
-				vgr.at(1)->SetPoint(vn.at(1)++, hit->x, hit->y, hit->z);
-			}
-		}
+	FillHitPosGraphWith(vgr, 0, 2, vHit);
+	if(vHitRnd.size()>0){
+		FillHitPosGraphWith(vgr, 2, 3, &vHitRnd);
 	}
 }
 
@@ -372,6 +359,44 @@ bool TEventAnalysis::isWithinCuts(THitStorage* hit){
 		return false;
 	}
 	return true;
+}
+
+void TEventAnalysis::FillHitPosGraphWith(vector<TGraph2D*> &vgr, UInt_t index0, UInt_t index1, vector<THitStorage>* vHitIn){
+	if(index1 > vgr.size()){
+		index1 = vgr.size();
+	}
+	vector<int> vn(index1-index0, 0);
+	// Check how many points to allocate in each graph
+	for(uint16_t ihit=0; ihit<vHitIn->size(); ihit++){
+		THitStorage *hit = &(vHitIn->at(ihit));
+		if(isWithinCuts(hit)){
+			vn.at(0)++;
+		}
+		else{
+			if(index1-index0 > 1){ // Fill to the second graph the hits, that did not pass the cuts
+				vn.at(1)++;
+			}
+		}
+	}
+
+	// Allocate the number of points to graphs
+	for(UInt_t igr=index0; igr<index1; igr++){
+		vgr.at(igr)->Set(vn.at(igr-index0));
+	}
+
+	std::fill(vn.begin(), vn.end(), 0);
+	// Fill the graphs (could be optimized - in the first step save indices of hits for each group; then save the correct hits directly to graphs here)
+	for(uint16_t ihit=0; ihit<vHitIn->size(); ihit++){
+		THitStorage *hit = &(vHitIn->at(ihit));
+		if(isWithinCuts(hit)){
+			vgr.at(index0)->SetPoint(vn.at(0)++, hit->x, hit->y, hit->z);
+		}
+		else{
+			if(index1-index0 > 1){ // Fill to the second graph the hits, that did not pass the cuts
+				vgr.at(index0+1)->SetPoint(vn.at(1)++, hit->x, hit->y, hit->z);
+			}
+		}
+	}
 }
 
 // Getters / setters
