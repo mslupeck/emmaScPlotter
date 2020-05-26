@@ -60,12 +60,16 @@ public:
 	TEventAnalysis(TEventAnalysis &ea);
 	virtual ~TEventAnalysis();
 
+	// Initial control plotting-related
 	void AnalyseLevelMultiplicity();
 	void AnalyseLevelSc16Multiplicity();
 	void FillLayerHistos(vector<TH2D*> &vh2);
 	void FillHbTbHistos(vector<int> &vTimeCnt, vector<int> &vHbCnt, vector<int> &vTimeAndHbCnt, vector<int> &vTimeOrHbCnt);
 	void FillRawScTimeHistos(TH2D* vh2);
 	double FillAvgHitTime(TH1D* h, int16_t zCoord);
+
+	// Event selection
+	void FillHitPosLevel(vector<TH2D*> &vh2control, vector<TH2D*> &vh2, int16_t multiplicityMin, int16_t multiplicityMax, float sigmaMin, float sigmaMax);
 
 	// Tracking / visualization
 	void FillHitPosGraph(vector<TGraph2D*> &vgr);

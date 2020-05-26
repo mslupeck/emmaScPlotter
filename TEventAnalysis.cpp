@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include "TEventAnalysis.h"
+#include "common.h"
 
 namespace std {
 
@@ -75,7 +76,7 @@ void TEventAnalysis::AnalyseLevelMultiplicity(){
 		for(UInt_t ihit=0; ihit<vHit->size(); ihit++){
 			THitStorage* hit = &(vHit->at(ihit));
 			if(isWithinCuts(hit)){
-				if(vZcoord->at(iz) == hit->z){
+				if(common::AreSame(vZcoord->at(iz), hit->z, EPSILON)){
 					vLevelPixelMultiplicity.at(iz)++;
 					vAvgX.at(iz) += hit->x;
 					vAvgY.at(iz) += hit->y;
@@ -89,7 +90,7 @@ void TEventAnalysis::AnalyseLevelMultiplicity(){
 		for(UInt_t ihit=0; ihit<vHit->size(); ihit++){
 			THitStorage* hit = &(vHit->at(ihit));
 			if(isWithinCuts(hit)){
-				if((vZcoord->at(iz) - hit->z) < EPSILON){
+				if(common::AreSame(vZcoord->at(iz), hit->z, EPSILON)){
 					vSigma2X.at(iz) += pow(vAvgX.at(iz) - hit->x, 2);
 					vSigma2Y.at(iz) += pow(vAvgY.at(iz) - hit->y, 2);
 				}
@@ -97,6 +98,7 @@ void TEventAnalysis::AnalyseLevelMultiplicity(){
 		}
 	}
 
+	nLevelsPresent = 0;
 	for(UInt_t iz=0; iz<vLevelPixelMultiplicity.size(); iz++){
 		if(vLevelPixelMultiplicity.at(iz) > 0){
 			nLevelsPresent++;
@@ -131,7 +133,7 @@ void TEventAnalysis::AnalyseLevelSc16Multiplicity(){
 
 		if(isWithinCuts(hit)){
 			for(UInt_t iz=0; iz<vZcoord->size(); iz++){
-				if(vZcoord->at(iz) - hit->z < EPSILON){
+				if(common::AreSame(vZcoord->at(iz), hit->z, EPSILON)){
 					vLevelSc16Multiplicity.at(iz)++;
 				}
 			}
@@ -152,7 +154,7 @@ void TEventAnalysis::FillLayerHistos(vector<TH2D*> &vh2){
 		THitStorage* hit = &(vHit->at(ihit));
 		if(isWithinCuts(hit)){
 			for(UInt_t iz=0; iz<vZcoord->size(); iz++){
-				if(vZcoord->at(iz) - hit->z < EPSILON){
+				if(common::AreSame(vZcoord->at(iz), hit->z, EPSILON)){
 					if(hit->scPixel == -1){ // if no pattern info present: paint all 16 pixels with 1/16th weight
 						for(UInt_t ipixel=0; ipixel<N_PIXELS_PER_SCM; ipixel++){
 							float dx = DXY_PIXEL*(2. * (ipixel%4) - 3);
@@ -225,6 +227,43 @@ double TEventAnalysis::FillAvgHitTime(TH1D* h, int16_t zCoord){
 	avgT /= nT;
 	h->Fill(avgT);
 	return avgT;
+}
+
+void TEventAnalysis::FillHitPosLevel(vector<TH2D*> &vh2control, vector<TH2D*> &vh2, int16_t multiplicityMin, int16_t multiplicityMax, float sigmaMin, float sigmaMax){
+	bool storeAllLayers = false;
+	for(UInt_t iz=0; iz<vLevelPixelMultiplicity.size(); iz++){
+		// Multiplicity cut
+		if(common::IsBetween(vLevelPixelMultiplicity.at(iz), -0.1+multiplicityMin, 0.1+multiplicityMax)){
+			storeAllLayers = true;
+			break;
+		}
+	}
+	for(UInt_t iz=0; iz<vLevelPixelMultiplicity.size(); iz++){
+		// Multiplicity cut
+		//if(storeAllLayers){
+		if(common::IsBetween(vLevelPixelMultiplicity.at(iz), -0.1+multiplicityMin, 0.1+multiplicityMax)){
+			double spread = TMath::Sqrt(vSigma2X.at(iz) + vSigma2Y.at(iz));
+			// Spread cut
+			if(common::IsBetween(spread, sigmaMin, sigmaMax)){
+				vh2control.at(0)->Fill(spread, vLevelPixelMultiplicity.at(iz));
+				if(vh2.size() > 100){ // don't store more than 100 histos
+					return;
+				}
+				stringstream ss;
+				ss << event->iEventNumberWithinRun << "_" << "L" << iz;
+				TH2D* h2xy = new TH2D(ss.str().c_str(), ss.str().c_str(), 18, -125, 2125, 14, -125, 1650);
+				for(UInt_t ihit=0; ihit<vHit->size(); ihit++){
+					THitStorage *hit = &(vHit->at(ihit));
+					if(common::AreSame(vZcoord->at(iz), hit->z, EPSILON)){
+						if(isWithinCuts(hit)){
+							h2xy->Fill(hit->x, hit->y);
+						}
+					}
+				}
+				vh2.push_back(h2xy);
+			}
+		}
+	}
 }
 
 void TEventAnalysis::FillHitPosGraph(vector<TGraph2D*> &vgr){

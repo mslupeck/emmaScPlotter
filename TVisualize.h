@@ -20,13 +20,19 @@
 
 namespace std {
 
+struct TVisStorage{
+	TEventAnalysis *ea;
+	vector<TGraph2D*> vGrVis;
+	vector<TTrack> vTrack;
+	TVisStorage(TEventAnalysis &ea) {this->ea = new TEventAnalysis(ea);};
+};
+
 class TVisualize {
 private:
-	vector< vector<TGraph2D*> > vvGrVis;
-	vector<TTrack> vTrack;
+	vector<TVisStorage*> vVisStorage;
 	TScMapReader* scMap;
 
-
+	bool isEvnStoredForVis(UInt_t evn);
 	void DrawBoxWireframe(double xc, double yc, double zc, double wx, double wy, double wz, uint16_t linewidth = 1, Color_t linecol = kGray);
 	void SetViewport(double x0, double y0, double z0, double x1, double y1, double z1, float fontsize, float xoffset, float yoffset, float zoffset, char option='\0');
 	void DrawScPixel(double x0, double y0, double z0, uint16_t linewidth = 1, Color_t linecol = kGray);
@@ -35,7 +41,7 @@ private:
 	void DrawScSetup(uint16_t linewidth = 1, Color_t linecol = kGray);
 	void DrawPb(uint16_t linewidth = 1, Color_t linecol = kGray);
 	void DrawNeutronTubes(uint16_t linewidth, Color_t linecol);
-	void CreateViewAndDrawAll(TEventAnalysis* ea, int evn, float fontsize, float xoffset, float yoffset, float zoffset, char option='\0');
+	void CreateViewAndDrawAll(UInt_t evn, float fontsize, float xoffset, float yoffset, float zoffset, char option='\0');
 	void Line(double t, double *p, double &x, double &y, double &z);
 	void DrawFired(TGraph2D *gr, Color_t col);
 	void DrawFit(double* parFit, uint16_t linewidth = 1, Color_t linecol = kGray);
@@ -51,9 +57,9 @@ public:
 	TVisualize();
 	virtual ~TVisualize();
 
-	void SaveForVis(TEventAnalysis* ea, uint16_t maxNVis = 100);
+	void SaveForVis(TEventAnalysis &eaIn, uint16_t maxNVis = 100);
 	void VisualizeMulti(TScMapReader* scMap);
-	void VisualizeSingleEvent(TEventAnalysis* ea, TScMapReader* scMap);
+	void VisualizeSingleEvent(TEventAnalysis &eaIn, TScMapReader* scMap);
 };
 
 } /* namespace std */

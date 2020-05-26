@@ -22,30 +22,34 @@ TReconstruct::TReconstruct(EmmaEventTreeReader *eetr, int verbose) {
 TReconstruct::~TReconstruct() {}
 
 void TReconstruct::RunReconstruct(){
+	vector<TH2D*> vh2control;
+	vh2control.push_back(new TH2D("h2spreadVsMulti","h2spreadVsMulti", 3000, 0, 3000, 200, 0, 200));
+	gStyle->SetOptStat("iou");
+	vector<TH2D*> vh2;
+
 	// Main event loop
 	vector<TFileStorage*>* vfs = eetr->GetFileStorage();
 	int nEntries = vfs->size();
 	for(int evn=0; evn<nEntries; evn++){
-//		cout << endl << "=== " << evn << " =============================================" << endl;
 		TEventAnalysis eaOrg(vfs->at(evn), eetr->GetCuts(), eetr->getZcoord());
-		eaOrg.AnalyseLevelMultiplicity();
+//		cout << endl << "=== R" << eaOrg.getRunNumber() << ":" << eaOrg.getEventNumberWithinRun() << " =============================================" << endl;
 		if(verbose >= 2){
 			if((evn%100000) == 0){
-				cout << " EvnProgress: " << evn << "/" << nEntries << " [" << ((float)round(1000.0*evn/nEntries))*0.1 << "%]" << endl;
+				cout << " EvnProgress: " << evn << "/" << nEntries << " [";
+				cout.precision(1);
+				cout << ((float)round(1000.0*evn/nEntries))*0.1 << "%]" << endl;
 			}
 		}
-		visualizer.SaveForVis(&eaOrg);
-//		TEventAnalysis eaProcessed(eaOrg);
+		eaOrg.AnalyseLevelMultiplicity();
+		TEventAnalysis eaProcessed(eaOrg);
+		eaProcessed.DeleteHitsWithBadTiming();
+		eaProcessed.AnalyseLevelMultiplicity(); // again because now some hits have been removed
+		eaProcessed.FillHitPosLevel(vh2control, vh2, 1, 3, 1, 160);
 
-//		eaProcessed.DeleteHitsWithBadTiming();
+//		visualizer.SaveForVis(eaProcessed);
 
-//		eaOrg.PrintHits();
-//		cout << "=== " << endl;
-//		eaProcessed.PrintHits();
 
 		/*
-		eOrg->DeleteHitsWithBadTiming();
-		eOrg->CalculateMLevel();
 		eOrg->CalculateClosestNeighbors(126); // closest: sqrt(2)*halfPixelSize = 89  ||  also diagonals: 2*halfPixelSize = 126
 
 		TGraph2D *gr = new TGraph2D();
@@ -79,26 +83,30 @@ void TReconstruct::RunReconstruct(){
 		*/
 	}
 
-	visualizer.VisualizeMulti(eetr->getScMap());
+	TCanvas *cvsSpread = new TCanvas("cvsSpread","cvsSpread",1800,600);
+	cvsSpread->Divide(3,1);
+	cvsSpread->cd(1);
+		gPad->SetLogy();
+		vh2control.at(0)->ProjectionX()->Draw();
+	cvsSpread->cd(2);
+		gPad->SetLogy();
+		vh2control.at(0)->ProjectionY()->Draw();
+	cvsSpread->cd(3);
+		gPad->SetLogy();
+		vh2control.at(0)->Draw("colz");
 
-/*	bool doVisualize = true;
-	uint16_t evn=12;
-	cout << "NEvents to visualize: " << evn << "..+12 / " << vGrVis.size() << endl;
-	if(doVisualize){
-		evn+=12;
-		if(vGrVis.size()<evn){
-			cout << "Too few events to visualize: " << vGrVis.size() << endl;
-			return;
-		}
-		TCanvas *cvsVis3d = new TCanvas("Vis3d","Vis3d",1800,1000);
-		SetViewportSize(cvsVis3d, -500,-500,-50, 2000,2000,450);
-		for(int ipad=0; ipad<12; ipad++){
-			cvsVis3d->cd(ipad+1);
-			DrawScSetup(-250,-250,-15,-125,-125,15);
-			Draw3dFit(vGrVis.at(evn-12+ipad), &(vParFitVis.at((evn-12+ipad)*4)));
+	TCanvas *cvsXy = new TCanvas("cvsXy","cvsXy",1750,850);
+	cvsXy->Divide(12,6);
+	for(UInt_t i=0; i<72; i++){
+		cvsXy->cd(i+1);
+		gPad->SetMargin(0, 0, 0, 0.2);
+		if(i < vh2.size()){
+			vh2.at(i)->Draw("colz");
+			common::DrawTextNdc(vh2.at(i)->GetName(), 0.0, 0.8, 0.2);
 		}
 	}
-*/
+
+//	visualizer.VisualizeMulti(eetr->getScMap());
 }
 
 

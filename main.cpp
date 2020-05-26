@@ -68,15 +68,15 @@ void RunVisualize(EmmaEventTreeReader &eetr){
 		if(eetr.ReadTreeFromRootFile() < 0) return;
 		int nEntries = eetr.GetFileStorage()->size();
 		// If additional cut on the event time is set then find the corresponding event, otherwise use evn = 0
-		int evn = 0;
+		int startEvn = 0;
 		double t0 = 0;
 		bool draw = false;
 		if((eetr.GetCuts()->t0 + 1) > 0.001){
-			for(evn = 0; evn<nEntries; evn++){
-				TFileStorage* fs = eetr.GetFileStorage()->at(evn);
+			for(startEvn = 0; startEvn<nEntries; startEvn++){
+				TFileStorage* fs = eetr.GetFileStorage()->at(startEvn);
 				t0 = fs->fEventTimeS + 1.e-9*fs->lFileStartTimeNs + fs->lFileStartTimeS;
 				if((t0 + 0.000002) > eetr.GetCuts()->t0){ // increase by 2 us to find the event indicated by this time, not the subsequent event
-					cout << "  <I> main:RunVisualize(): Found evn:" << evn << " with time:" << t0 << " following input:" << fixed << eetr.GetCuts()->t0 << endl;
+					cout << "  <I> main:RunVisualize(): Found evn:" << startEvn << " with time:" << t0 << " following input:" << fixed << eetr.GetCuts()->t0 << endl;
 					draw = true;
 					break;
 				}
@@ -86,10 +86,21 @@ void RunVisualize(EmmaEventTreeReader &eetr){
 			draw = true;
 		}
 		if(draw){
-			TVisualize vis;
-			TEventAnalysis ea(eetr.GetFileStorage()->at(evn), eetr.GetCuts(), eetr.getZcoord());
-			ea.AnalyseLevelMultiplicity();
-			vis.VisualizeSingleEvent(&ea, eetr.getScMap());
+			if(eetr.GetCuts()->nMax == 1){
+				TVisualize vis;
+				TEventAnalysis ea(eetr.GetFileStorage()->at(startEvn), eetr.GetCuts(), eetr.getZcoord());
+				ea.AnalyseLevelMultiplicity();
+				vis.VisualizeSingleEvent(ea, eetr.getScMap());
+			}
+			else{
+				TVisualize vis;
+				for(int evn=startEvn; evn<nEntries; evn++){
+					TEventAnalysis ea(eetr.GetFileStorage()->at(evn), eetr.GetCuts(), eetr.getZcoord());
+					ea.AnalyseLevelMultiplicity();
+					vis.SaveForVis(ea);
+				}
+				vis.VisualizeMulti(eetr.getScMap());
+			}
 		}
 		else{
 			cout << "<E> main:RunVisualize(). Time > " << fixed << eetr.GetCuts()->t0 << " not found. Try a further run." << endl;
